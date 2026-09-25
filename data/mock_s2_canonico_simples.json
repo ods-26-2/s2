@@ -1,0 +1,10 @@
+{
+  "global_entity_id": "global_99",
+  "zone_id": "zona_segura_01",
+  "timestamp": "2026-09-16T10:48:02.000Z",
+  "merged_sources": [
+    "camera_frontal_01"
+  ],
+  "adjusted_confidence": 0.92,
+  "status_final": "confirmado"
+}

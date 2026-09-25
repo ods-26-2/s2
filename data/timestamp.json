@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "2026-09-16T10:47:28.100Z",
+    "source_id": "cam_frontal",
+    "entity_id": "obj_01",
+    "world_coordinates": {"x": 50.9, "y": 25.0} 
+  },
+  {
+    "timestamp": "2026-09-16T10:47:28.200Z",
+    "source_id": "cam_frontal",
+    "entity_id": "obj_01",
+    "world_coordinates": {"x": 51.1, "y": 25.0}
+  },
+  {
+    "timestamp": "2026-09-16T10:47:28.300Z",
+    "source_id": "cam_frontal",
+    "entity_id": "obj_01",
+    "world_coordinates": {"x": 50.8, "y": 25.0} 
+  }
+]

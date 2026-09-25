@@ -1,0 +1,2810 @@
+[
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.923Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_1",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1149.5,
+            "y": 848.0,
+            "timestamp": 1789552827800,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.924Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_2",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1128.5,
+            "y": 835.5,
+            "timestamp": 1789552828320,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.924Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_3",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1105.0,
+            "y": 822.5,
+            "timestamp": 1789552828840,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.924Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_4",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1082.5,
+            "y": 805.0,
+            "timestamp": 1789552829360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.924Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_5",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1056.0,
+            "y": 780.0,
+            "timestamp": 1789552829880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.924Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_6",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1037.0,
+            "y": 749.0,
+            "timestamp": 1789552830400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_7",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1015.0,
+            "y": 722.5,
+            "timestamp": 1789552830920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_8",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1002.0,
+            "y": 696.5,
+            "timestamp": 1789552831440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_9",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 990.0,
+            "y": 672.5,
+            "timestamp": 1789552831960,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_10",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 980.0,
+            "y": 653.5,
+            "timestamp": 1789552832480,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_11",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 971.0,
+            "y": 633.5,
+            "timestamp": 1789552833000,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_12",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 951.0,
+            "y": 602.5,
+            "timestamp": 1789552833520,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_13",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 925.0,
+            "y": 588.0,
+            "timestamp": 1789552834040,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_14",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 903.0,
+            "y": 564.0,
+            "timestamp": 1789552834560,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_15",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 879.0,
+            "y": 541.0,
+            "timestamp": 1789552835080,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_16",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 863.0,
+            "y": 520.0,
+            "timestamp": 1789552835600,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.925Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_17",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 857.5,
+            "y": 502.0,
+            "timestamp": 1789552836120,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_18",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 856.5,
+            "y": 484.5,
+            "timestamp": 1789552836640,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_19",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 862.5,
+            "y": 466.0,
+            "timestamp": 1789552837160,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_20",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 871.5,
+            "y": 447.0,
+            "timestamp": 1789552837680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_21",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 880.5,
+            "y": 426.5,
+            "timestamp": 1789552838200,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_22",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 889.0,
+            "y": 406.5,
+            "timestamp": 1789552838720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_23",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 898.5,
+            "y": 387.0,
+            "timestamp": 1789552839240,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_24",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 909.0,
+            "y": 369.0,
+            "timestamp": 1789552839760,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_25",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 919.5,
+            "y": 351.0,
+            "timestamp": 1789552840280,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_26",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 930.5,
+            "y": 333.0,
+            "timestamp": 1789552840800,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.926Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_27",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 942.5,
+            "y": 315.0,
+            "timestamp": 1789552841320,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_28",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 955.5,
+            "y": 296.0,
+            "timestamp": 1789552841840,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_29",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 970.5,
+            "y": 276.0,
+            "timestamp": 1789552842360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_30",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 986.0,
+            "y": 260.0,
+            "timestamp": 1789552842880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_31",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1001.0,
+            "y": 249.0,
+            "timestamp": 1789552843400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_32",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1018.0,
+            "y": 237.0,
+            "timestamp": 1789552843920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_33",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1039.0,
+            "y": 225.0,
+            "timestamp": 1789552844440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_34",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 3.5,
+            "y": 200.5,
+            "timestamp": 1789552833720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_35",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 14.0,
+            "y": 192.5,
+            "timestamp": 1789552834240,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_36",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 22.0,
+            "y": 184.5,
+            "timestamp": 1789552834760,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_37",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 43.0,
+            "y": 176.0,
+            "timestamp": 1789552835280,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_38",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 62.5,
+            "y": 165.5,
+            "timestamp": 1789552835800,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.927Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_39",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 79.0,
+            "y": 157.5,
+            "timestamp": 1789552836320,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_40",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 95.5,
+            "y": 151.5,
+            "timestamp": 1789552836840,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_41",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 115.0,
+            "y": 142.5,
+            "timestamp": 1789552837360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_42",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 134.5,
+            "y": 132.5,
+            "timestamp": 1789552837880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_43",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 154.5,
+            "y": 124.5,
+            "timestamp": 1789552838400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_44",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 171.0,
+            "y": 115.5,
+            "timestamp": 1789552838920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_45",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 187.5,
+            "y": 106.5,
+            "timestamp": 1789552839440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_46",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 204.5,
+            "y": 94.5,
+            "timestamp": 1789552839960,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_47",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 220.5,
+            "y": 84.5,
+            "timestamp": 1789552840480,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_48",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 234.5,
+            "y": 74.5,
+            "timestamp": 1789552841000,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_49",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 248.5,
+            "y": 61.5,
+            "timestamp": 1789552841520,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_50",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 261.5,
+            "y": 46.0,
+            "timestamp": 1789552842040,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_51",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 276.5,
+            "y": 37.5,
+            "timestamp": 1789552842560,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_52",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 293.5,
+            "y": 31.5,
+            "timestamp": 1789552843080,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_53",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 310.5,
+            "y": 27.5,
+            "timestamp": 1789552843600,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.928Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_54",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 322.5,
+            "y": 23.5,
+            "timestamp": 1789552844120,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_55",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 334.5,
+            "y": 20.0,
+            "timestamp": 1789552844640,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_56",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 346.5,
+            "y": 18.0,
+            "timestamp": 1789552845160,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_57",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 357.5,
+            "y": 12.5,
+            "timestamp": 1789552845680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_58",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 5.0,
+            "y": 867.0,
+            "timestamp": 1789552824680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_59",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 20.0,
+            "y": 855.0,
+            "timestamp": 1789552825200,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_60",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 59.0,
+            "y": 841.0,
+            "timestamp": 1789552825720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_61",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 91.5,
+            "y": 824.5,
+            "timestamp": 1789552826240,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_62",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 116.0,
+            "y": 811.0,
+            "timestamp": 1789552826760,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_63",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 148.0,
+            "y": 786.0,
+            "timestamp": 1789552827280,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_64",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 179.5,
+            "y": 769.5,
+            "timestamp": 1789552827800,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_65",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 215.5,
+            "y": 743.5,
+            "timestamp": 1789552828320,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_66",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 248.5,
+            "y": 718.5,
+            "timestamp": 1789552828840,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_67",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 275.5,
+            "y": 704.5,
+            "timestamp": 1789552829360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_68",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 309.0,
+            "y": 689.5,
+            "timestamp": 1789552829880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_69",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 341.0,
+            "y": 671.0,
+            "timestamp": 1789552830400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_70",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 360.0,
+            "y": 644.5,
+            "timestamp": 1789552830920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_71",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 383.0,
+            "y": 626.5,
+            "timestamp": 1789552831440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_72",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 403.0,
+            "y": 609.0,
+            "timestamp": 1789552831960,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.929Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_73",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 424.0,
+            "y": 593.0,
+            "timestamp": 1789552832480,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_74",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 443.0,
+            "y": 575.0,
+            "timestamp": 1789552833000,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_75",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 472.5,
+            "y": 558.0,
+            "timestamp": 1789552833520,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_76",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 491.0,
+            "y": 537.5,
+            "timestamp": 1789552834040,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_77",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 515.0,
+            "y": 530.0,
+            "timestamp": 1789552834560,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_78",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 539.0,
+            "y": 509.0,
+            "timestamp": 1789552835080,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_79",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 558.5,
+            "y": 492.0,
+            "timestamp": 1789552835600,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_80",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 577.0,
+            "y": 480.0,
+            "timestamp": 1789552836120,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_81",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 597.5,
+            "y": 461.0,
+            "timestamp": 1789552836640,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_82",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 628.5,
+            "y": 449.0,
+            "timestamp": 1789552837160,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_83",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 649.5,
+            "y": 437.0,
+            "timestamp": 1789552837680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_84",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 669.0,
+            "y": 423.0,
+            "timestamp": 1789552838200,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_85",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 689.0,
+            "y": 409.0,
+            "timestamp": 1789552838720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_86",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 710.0,
+            "y": 396.0,
+            "timestamp": 1789552839240,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_87",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 722.0,
+            "y": 379.0,
+            "timestamp": 1789552839760,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_88",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 730.5,
+            "y": 364.0,
+            "timestamp": 1789552840280,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_89",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 742.0,
+            "y": 353.0,
+            "timestamp": 1789552840800,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_90",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 754.0,
+            "y": 343.0,
+            "timestamp": 1789552841320,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_91",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 767.0,
+            "y": 322.0,
+            "timestamp": 1789552841840,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_92",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 776.0,
+            "y": 301.0,
+            "timestamp": 1789552842360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_93",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 783.0,
+            "y": 282.0,
+            "timestamp": 1789552842880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_94",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 786.0,
+            "y": 269.0,
+            "timestamp": 1789552843400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_95",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 797.5,
+            "y": 256.0,
+            "timestamp": 1789552843920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.930Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_96",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 801.5,
+            "y": 239.0,
+            "timestamp": 1789552844440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_97",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 804.0,
+            "y": 229.5,
+            "timestamp": 1789552844960,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_98",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 807.0,
+            "y": 220.5,
+            "timestamp": 1789552845480,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_99",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 4.0,
+            "y": 161.0,
+            "timestamp": 1789552836360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_100",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 14.0,
+            "y": 153.0,
+            "timestamp": 1789552836880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_101",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 31.0,
+            "y": 143.0,
+            "timestamp": 1789552837400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_102",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 52.0,
+            "y": 133.0,
+            "timestamp": 1789552837920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_103",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 68.5,
+            "y": 122.0,
+            "timestamp": 1789552838440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_104",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 91.5,
+            "y": 113.0,
+            "timestamp": 1789552838960,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_105",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 111.0,
+            "y": 102.5,
+            "timestamp": 1789552839480,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_106",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 130.0,
+            "y": 92.0,
+            "timestamp": 1789552840000,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_107",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 149.0,
+            "y": 80.0,
+            "timestamp": 1789552840520,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_108",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 168.5,
+            "y": 69.0,
+            "timestamp": 1789552841040,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_109",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 188.5,
+            "y": 57.0,
+            "timestamp": 1789552841560,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_110",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 207.5,
+            "y": 45.5,
+            "timestamp": 1789552842080,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_111",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 225.5,
+            "y": 38.5,
+            "timestamp": 1789552842600,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_112",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 243.5,
+            "y": 28.5,
+            "timestamp": 1789552843120,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_113",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 261.5,
+            "y": 23.0,
+            "timestamp": 1789552843640,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_114",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 278.0,
+            "y": 19.0,
+            "timestamp": 1789552844160,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_115",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 296.0,
+            "y": 16.0,
+            "timestamp": 1789552844680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_116",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 316.5,
+            "y": 13.0,
+            "timestamp": 1789552845200,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_117",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 334.5,
+            "y": 9.0,
+            "timestamp": 1789552845720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_118",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1076.5,
+            "y": 278.5,
+            "timestamp": 1789552826400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_119",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1077.0,
+            "y": 263.5,
+            "timestamp": 1789552826920,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_120",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1074.0,
+            "y": 257.0,
+            "timestamp": 1789552827440,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_121",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1055.5,
+            "y": 243.5,
+            "timestamp": 1789552827960,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_122",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1029.0,
+            "y": 232.5,
+            "timestamp": 1789552828480,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_123",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 971.5,
+            "y": 225.5,
+            "timestamp": 1789552829000,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_124",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 907.0,
+            "y": 230.5,
+            "timestamp": 1789552829520,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_125",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 850.0,
+            "y": 227.5,
+            "timestamp": 1789552830040,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_126",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 793.5,
+            "y": 231.5,
+            "timestamp": 1789552830560,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_127",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 748.5,
+            "y": 240.5,
+            "timestamp": 1789552831080,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_128",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 691.5,
+            "y": 242.5,
+            "timestamp": 1789552831600,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_129",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 637.0,
+            "y": 241.0,
+            "timestamp": 1789552832120,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_130",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 588.0,
+            "y": 242.0,
+            "timestamp": 1789552832640,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.931Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_131",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 541.5,
+            "y": 247.0,
+            "timestamp": 1789552833160,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_132",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 497.5,
+            "y": 249.0,
+            "timestamp": 1789552833680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_133",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 457.0,
+            "y": 257.0,
+            "timestamp": 1789552834200,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_134",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 415.0,
+            "y": 266.0,
+            "timestamp": 1789552834720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_135",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 363.5,
+            "y": 267.0,
+            "timestamp": 1789552835240,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_136",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 319.5,
+            "y": 270.5,
+            "timestamp": 1789552835760,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_137",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 276.0,
+            "y": 275.5,
+            "timestamp": 1789552836280,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_138",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 230.5,
+            "y": 283.5,
+            "timestamp": 1789552836800,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_139",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 187.5,
+            "y": 286.5,
+            "timestamp": 1789552837320,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_140",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 143.5,
+            "y": 291.0,
+            "timestamp": 1789552837840,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_141",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 100.0,
+            "y": 298.0,
+            "timestamp": 1789552838360,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_142",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 53.0,
+            "y": 301.5,
+            "timestamp": 1789552838880,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_143",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 21.0,
+            "y": 311.0,
+            "timestamp": 1789552839400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_144",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1043.0,
+            "y": 867.0,
+            "timestamp": 1789552822000,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_145",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 1015.5,
+            "y": 853.5,
+            "timestamp": 1789552822520,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_146",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 991.5,
+            "y": 836.5,
+            "timestamp": 1789552823040,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_147",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 973.5,
+            "y": 821.0,
+            "timestamp": 1789552823560,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_148",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 959.0,
+            "y": 799.0,
+            "timestamp": 1789552824080,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_149",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 947.5,
+            "y": 771.0,
+            "timestamp": 1789552824600,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_150",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 937.0,
+            "y": 734.5,
+            "timestamp": 1789552825120,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_151",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 931.0,
+            "y": 696.5,
+            "timestamp": 1789552825640,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_152",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 929.0,
+            "y": 660.5,
+            "timestamp": 1789552826160,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_153",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 926.0,
+            "y": 630.5,
+            "timestamp": 1789552826680,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_154",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 923.5,
+            "y": 601.0,
+            "timestamp": 1789552827200,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_155",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 909.0,
+            "y": 571.5,
+            "timestamp": 1789552827720,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-09-25T02:48:21.932Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_156",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 893.0,
+            "y": 540.5,
+            "timestamp": 1789552828240,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    }
+]

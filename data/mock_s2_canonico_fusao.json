@@ -1,0 +1,11 @@
+{
+  "global_entity_id": "global_fusao_45_99",
+  "zone_id": "zona_proibida_01",
+  "timestamp": "2026-09-16T10:48:05.500Z",
+  "merged_sources": [
+    "camera_frontal_01",
+    "camera_lateral_02"
+  ],
+  "adjusted_confidence": 0.98,
+  "status_final": "confirmado"
+}

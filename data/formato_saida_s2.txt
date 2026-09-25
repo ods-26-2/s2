@@ -1,0 +1,16 @@
+{
+  "message_type": "event",
+  "schema": "ods.visao.evento_canonico",
+  "schema_version": "1.0",
+  "producer": "S2",
+  "published_at": "2026-09-23T11:19:31.500Z",
+  "payload": {
+    "global_entity_id": string,
+    "fontes_origem": array,
+    "x": number,
+    "y": number,
+    "timestamp": number,
+    "status": string,
+    "zone_id?": string
+  }
+}
