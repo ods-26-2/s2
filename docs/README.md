@@ -28,11 +28,9 @@ Os parâmetros de configuração e as estruturas de estado utilizadas pelo S2 s�
 
 ### 3.1. Filtro de Ruído Temporal (Janela e Debounce)
 
-Detecções visuais na borda das zonas de interesse tendem a oscilar rapidamente entre **"dentro"** e **"fora"**.
+Detecções visuais podem apresentar oscilações rápidas, especialmente em situações próximas aos limites de uma zona de interesse.
 
-O S2 implementa algoritmos de limitação de taxa (*sliding window* / *token bucket*) para aplicar um *debounce* a esses eventos.
-
-Atualizações excessivas no mesmo milissegundo são descartadas, garantindo uma taxa de atualização estável para o Dashboard.
+Para reduzir o impacto de eventos repetidos em um curto intervalo, o S2 aplica um mecanismo de debounce temporal.
 
 ### 3.2. Persistência Mínima (TTL e Condition Tracker)
 
