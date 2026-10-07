@@ -32,17 +32,23 @@ Detecções visuais podem apresentar oscilações rápidas, especialmente em sit
 
 Para reduzir o impacto de eventos repetidos em um curto intervalo, o S2 aplica um mecanismo de debounce temporal.
 
-### 3.2. Persistência Mínima (TTL e Condition Tracker)
+### 3.2. Estado em Memória e Deduplicação
 
-Para conferir resiliência ao sistema contra falhas da Inteligência Artificial (como oclusões visuais temporárias, onde uma pessoa passa atrás de uma pilastra), o S2 utiliza um rastreador de condição acoplado a um *Time-To-Live* (TTL).
+O S2 mantém informações das entidades processadas em memória por meio do atributo
+`estado_em_memoria`, utilizado pelo `MotorGerenciamentoEstadoConcorrente`.
 
-Se uma entidade desaparece do fluxo de entrada, ela é mantida na memória do S2 até que o TTL expire.
+Esse estado auxilia o processamento das entidades durante a consolidação e
+deduplicação dos eventos recebidos. A fusão entre eventos considera a proximidade
+temporal e espacial das detecções, utilizando os parâmetros
+`time_sync_threshold_ms` e `merge_distance_threshold`.
 
-Isso evita o registro incorreto de múltiplos eventos de saída e reentrada para a mesma entidade.
+O código atual ainda não implementa um mecanismo de TTL para expiração automática das
+entidades nem um rastreador específico para persistência durante o desaparecimento
+temporário de uma entidade.
 
 ### 3.3. Fusão e Deduplicação de Identidades
 
-O `MotorEstadoConcorrente` resolve conflitos oriundos de múltiplas fontes (várias câmeras apontando para o mesmo local).
+O `MotorGerenciamentoEstadoConcorrente` resolve conflitos oriundos de múltiplas fontes (várias câmeras apontando para o mesmo local).
 
 Utilizando limiares de distância espacial e sincronia temporal, o sistema correlaciona detecções concorrentes e funde as identidades, emitindo um único `global_entity_id`.
 
