@@ -20,7 +20,9 @@ A semântica do que é um **"risco crítico"** ou **"situação normal"** é del
 
 ### 2.2. Ocultação de Informação (*Information Hiding*)
 
-Os parâmetros de configuração e as estruturas de estado utilizadas pelo S2 são mantidos como atributos das classes responsáveis pelo processamento. Dessa forma, o gerenciamento desses valores fica concentrado nos componentes que implementam as respectivas regras de processamento.
+Os parâmetros de configuração e as estruturas de estado utilizadas pelo S2 são mantidos como atributos das classes responsáveis pelo processamento.
+
+Dessa forma, o gerenciamento desses valores fica concentrado nos componentes que implementam as respectivas regras de processamento.
 
 ---
 
