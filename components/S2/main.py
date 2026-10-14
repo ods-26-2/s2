@@ -93,7 +93,8 @@ if __name__ == "__main__":
                     "detection_id": payload.get("detection_id", "det-01"),
                     "confidence": payload.get("confidence", 1.0),
                     "phase": payload.get("phase", "STARTED"),
-                    "epi_compliance": payload.get("epi_compliance", {})
+                    "epi_compliance": payload.get("epi_compliance", {}),
+                    "catalog_version": payload.get("catalog_version") or payload.get("epi_compliance", {}).get("catalog_version", "v1.0.0")
                 })
             
             # --- 2. EXECUÇÃO DO PIPELINE S2 ---
