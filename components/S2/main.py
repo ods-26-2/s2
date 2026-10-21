@@ -35,7 +35,7 @@ class CamadaS2:
         return eventos_canonicos_finais
 
 if __name__ == "__main__":
-    caminho_saida_s1 = "data/saida_s1.json"
+    caminho_saida_s1 = "data/output/eventos_s1.json"
 
     def executar_teste_com_ficheiro(caminho_ficheiro):
         s2 = CamadaS2()
