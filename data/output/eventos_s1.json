@@ -46,5 +46,41 @@
         "y": 25.0
       }
     }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.visao.evento_espacial",
+    "schema_version": "1.0",
+    "producer": "S1",
+    "published_at": "2026-09-16T10:47:28.400Z",
+    "payload": {
+      "entity_id": "cam_frontal:99",
+      "source_id": "cam_frontal",
+      "timestamp": "2026-09-16T10:47:28.400Z",
+      "world_coordinates": {
+        "x": 10.0,
+        "y": 10.0
+      }
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.visao.evento_espacial",
+    "schema_version": "1.0",
+    "producer": "S1",
+    "published_at": "2026-09-16T10:47:28.500Z",
+    "payload": {
+      "entity_id": "cam_frontal:99",
+      "source_id": "cam_frontal",
+      "timestamp": "2026-09-16T10:47:28.500Z",
+      "world_coordinates": {
+        "x": 15.0,
+        "y": 10.0
+      },
+      "zone_id": "zona_segura_01",
+      "transition": {
+        "type": "entrada"
+      }
+    }
   }
 ]
