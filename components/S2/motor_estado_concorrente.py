@@ -15,9 +15,10 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
 class MotorGerenciamentoEstadoConcorrente:
-    def __init__(self, merge_distance_threshold: float = 2.0, time_sync_threshold_ms: int = 100):
+    def __init__(self, merge_distance_threshold: float = 2.0, time_sync_threshold_ms: int = 100, ttl_threshold_ms: int = 5000):
         self.merge_distance_threshold = merge_distance_threshold
         self.time_sync_threshold_ms = time_sync_threshold_ms
+        self.ttl_threshold_ms = ttl_threshold_ms
         self.estado_em_memoria = {}
         self.global_id_counter = 1
         self.sequence_counter = 0
