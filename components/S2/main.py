@@ -1,116 +1,159 @@
-"""
-Módulo: Pipeline Principal da Camada S2
-Sprint: Adequação à Versão 6c
+"""Ponto de entrada do componente S2 (arquitetura ODS 6c, interfaces 1.0).
 
-Responsabilidades atendidas:
-- Orquestração do pipeline completo (Filtro Temporal -> Motor de Estado Concorrente).
-- Normalização de dados brutos e suporte ao comando de regras dinâmicas.
-- Exportação de saídas compatíveis com os perfis EV-SINAL e EV-SERVIÇO.
+Entrada: array de mensagens com envelope comum, normalmente ods.i2.tracks e
+ods.s1.position. Saida: array de mensagens ods.s2.entity e ods.s2.event.
+As regras sao lidas do artefato RULES informado por --rules.
 """
+from __future__ import annotations
 
+import argparse
 import json
-import os
-from datetime import datetime
+import sys
+from collections import Counter
+from pathlib import Path
+from typing import Any
 
-from filtro_ruido_temporal import FiltroRuidoTemporal
-from motor_estado_concorrente import MotorGerenciamentoEstadoConcorrente
+try:  # execução como pacote: python -m components.S2.main
+    from .config import (
+        CAMINHO_ENTRADA_S2, CAMINHO_ENTRADA_S2_FUSAO, CAMINHO_REGRAS_S2,
+        CAMINHO_REGRAS_S2_EXEMPLO, CAMINHO_SAIDA_S2, DIRETORIO_SAIDA_S2,
+        TREINO_MOT20_ESCOLHIDO,
+    )
+    from .filtro_ruido_temporal import FiltroRuidoTemporal
+    from .motor_estado_concorrente import MotorGerenciamentoEstadoConcorrente
+except ImportError:  # execução direta a partir de components/S2
+    from config import (
+        CAMINHO_ENTRADA_S2, CAMINHO_ENTRADA_S2_FUSAO, CAMINHO_REGRAS_S2,
+        CAMINHO_REGRAS_S2_EXEMPLO, CAMINHO_SAIDA_S2, DIRETORIO_SAIDA_S2,
+        TREINO_MOT20_ESCOLHIDO,
+    )
+    from filtro_ruido_temporal import FiltroRuidoTemporal
+    from motor_estado_concorrente import MotorGerenciamentoEstadoConcorrente
+
 
 class CamadaS2:
-    def __init__(self):
+    """Orquestra os mecanismos temporais e o estado do componente S2."""
+
+    def __init__(self, artefato_regras: dict[str, Any] | None = None) -> None:
         self.filtro_temporal = FiltroRuidoTemporal()
-        self.motor_estado = MotorGerenciamentoEstadoConcorrente()
+        self.motor_estado = MotorGerenciamentoEstadoConcorrente(
+            filtro_temporal=self.filtro_temporal
+        )
+        if artefato_regras is not None:
+            self.motor_estado.carregar_regras(artefato_regras)
 
-    def processar_comando_regras(self, comando_bruto: dict) -> dict:
-        """Processa o comando textual de regras ods.s2.rules.command."""
-        return self.motor_estado.processar_comando_regras(comando_bruto)
+    def processar_eventos(self, fluxo_bruto: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Processa mensagens de entrada conforme os contratos registrados."""
+        return self.motor_estado.processar_mensagens(fluxo_bruto)
 
-    def processar_eventos(self, fluxo_bruto: list, session_id: str = "default_session") -> list:
-        """
-        Linha de montagem (Pipeline) da Camada S2:
-        1. Filtro de Ruído Temporal (Debounce)
-        2. Motor de Fusão, Deduplicação e Envelopamento Canônico v6c
-        """
-        eventos_sem_ruido = self.filtro_temporal.processar(fluxo_bruto)
-        eventos_canonicos_finais = self.motor_estado.fusao_e_deduplicacao(eventos_sem_ruido, session_id=session_id)
-        return eventos_canonicos_finais
+
+def _ler_json(caminho: Path) -> Any:
+    try:
+        with caminho.open("r", encoding="utf-8") as arquivo:
+            return json.load(arquivo)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"JSON invalido em {caminho}, linha {exc.lineno}, coluna {exc.colno}: {exc.msg}"
+        ) from exc
+
+
+def _ler_mensagens(caminho: Path) -> list[dict[str, Any]]:
+    dados = _ler_json(caminho)
+    if isinstance(dados, dict):
+        # Aceita envelope de lote explicito sem confundir com uma mensagem.
+        if isinstance(dados.get("messages"), list):
+            dados = dados["messages"]
+        else:
+            dados = [dados]
+    if not isinstance(dados, list):
+        raise ValueError("A raiz do JSON de entrada deve ser uma mensagem, um array ou {\"messages\": [...]}")
+    if not all(isinstance(item, dict) for item in dados):
+        raise ValueError("Todos os itens do JSON de entrada devem ser objetos de mensagem")
+    return dados
+
+
+def _ler_regras(caminho_solicitado: Path | None) -> tuple[dict[str, Any] | None, Path | None]:
+    """Carrega RULES; se o arquivo de producao nao existir, usa exemplo de teste."""
+    if caminho_solicitado is not None:
+        if not caminho_solicitado.exists():
+            raise FileNotFoundError(f"Artefato RULES nao encontrado: {caminho_solicitado}")
+        dados = _ler_json(caminho_solicitado)
+        if not isinstance(dados, dict):
+            raise ValueError("O artefato RULES deve ser um objeto JSON com artifact_version e rules")
+        return dados, caminho_solicitado
+
+    if CAMINHO_REGRAS_S2.exists():
+        dados = _ler_json(CAMINHO_REGRAS_S2)
+        if not isinstance(dados, dict):
+            raise ValueError(f"O artefato RULES deve ser um objeto JSON: {CAMINHO_REGRAS_S2}")
+        return dados, CAMINHO_REGRAS_S2
+
+    if CAMINHO_REGRAS_S2_EXEMPLO.exists():
+        dados = _ler_json(CAMINHO_REGRAS_S2_EXEMPLO)
+        if not isinstance(dados, dict):
+            raise ValueError("O arquivo de exemplo RULES deve conter um objeto JSON")
+        print(
+            f"[AVISO] {CAMINHO_REGRAS_S2} nao existe; usando regras demonstrativas de "
+            f"{CAMINHO_REGRAS_S2_EXEMPLO}. Para uso real, forneca seu artefato RULES.",
+            file=sys.stderr,
+        )
+        return dados, CAMINHO_REGRAS_S2_EXEMPLO
+
+    return None, None
+
+
+def executar(caminho_entrada: Path, caminho_saida: Path, caminho_regras: Path | None = None) -> int:
+    if not caminho_entrada.exists():
+        print(f"[ERRO] Arquivo de entrada nao encontrado: {caminho_entrada}", file=sys.stderr)
+        return 2
+
+    try:
+        mensagens = _ler_mensagens(caminho_entrada)
+        artefato_regras, origem_regras = _ler_regras(caminho_regras)
+        s2 = CamadaS2(artefato_regras)
+        mensagens_saida = s2.processar_eventos(mensagens)
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"[ERRO] {exc}", file=sys.stderr)
+        return 2
+
+    caminho_saida.parent.mkdir(parents=True, exist_ok=True)
+    with caminho_saida.open("w", encoding="utf-8") as arquivo:
+        json.dump(mensagens_saida, arquivo, indent=2, ensure_ascii=False)
+        arquivo.write("\n")
+
+    contagem = Counter(item.get("schema", "schema_desconhecido") for item in mensagens_saida)
+    print(f"Entrada: {caminho_entrada} ({len(mensagens)} mensagens)")
+    print(f"Regras: {origem_regras if origem_regras else 'nenhum artefato RULES carregado'}")
+    print(f"Saida: {caminho_saida} ({len(mensagens_saida)} mensagens)")
+    for schema, quantidade in sorted(contagem.items()):
+        print(f"  {schema}: {quantidade}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Executa o componente S2 da arquitetura ODS 6c.")
+    parser.add_argument(
+        "--input", "-i", type=Path, default=CAMINHO_ENTRADA_S2,
+        help=f"JSON de mensagens de entrada (padrao: {CAMINHO_ENTRADA_S2})",
+    )
+    parser.add_argument(
+        "--output", "-o", type=Path, default=CAMINHO_SAIDA_S2,
+        help=f"JSON de mensagens ods.s2.entity/event (padrao: {CAMINHO_SAIDA_S2})",
+    )
+    parser.add_argument(
+        "--rules", "-r", type=Path, default=None,
+        help=f"Artefato RULES; por padrao procura {CAMINHO_REGRAS_S2} e depois {CAMINHO_REGRAS_S2_EXEMPLO}",
+    )
+    parser.add_argument(
+        "--fusao-mock", action="store_true",
+        help="Usa o JSON demonstrativo de duas cameras gerado por gerar_mocks.py",
+    )
+    args = parser.parse_args()
+    entrada = args.input
+    if args.fusao_mock and args.input == CAMINHO_ENTRADA_S2:
+        entrada = CAMINHO_ENTRADA_S2_FUSAO
+    return executar(entrada, args.output, args.rules)
+
 
 if __name__ == "__main__":
-    caminho_saida_s1 = "data/output/eventos_s1.json"
-
-    def executar_teste_com_ficheiro(caminho_ficheiro):
-        s2 = CamadaS2()
-        
-        if os.path.exists(caminho_ficheiro):
-            print(f"\n=== Processando a entrada v6c: {caminho_ficheiro} ===")
-            
-            with open(caminho_ficheiro, 'r', encoding='utf-8') as ficheiro:
-                conteudo_bruto = json.load(ficheiro)
-            
-            if isinstance(conteudo_bruto, dict):
-                conteudo_bruto = [conteudo_bruto]
-                
-            # Verifica se há comandos de regras no fluxo de entrada
-            eventos_para_processar = []
-            for item in conteudo_bruto:
-                if item.get("schema") == "ods.s2.rules.command" or item.get("message_type") == "command":
-                    resposta_reply = s2.processar_comando_regras(item)
-                    print(f"-> Comando de regras processado. Reply gerada: {resposta_reply['schema']}")
-                else:
-                    eventos_para_processar.append(item)
-                
-            # --- 1. NORMALIZAÇÃO DOS DADOS PARA V6C ---
-            eventos_normalizados = []
-            for ev in eventos_para_processar:
-                payload = ev.get("payload", ev)
-                
-                ts_str = payload.get("timestamp")
-                if not ts_str and "transition" in payload:
-                    ts_str = payload["transition"].get("timestamp")
-                    
-                ts_ms = 0
-                if ts_str:
-                    if isinstance(ts_str, int):
-                        ts_ms = ts_str
-                    elif isinstance(ts_str, str):
-                        try:
-                            dt = datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%S.%fZ")
-                            ts_ms = int(dt.timestamp() * 1000)
-                        except ValueError:
-                            ts_ms = int(datetime.now().timestamp() * 1000)
-                        
-                coords = payload.get("world_coordinates", {})
-                x = payload.get("x", coords.get("x", 0.0))
-                y = payload.get("y", coords.get("y", 0.0))
-                
-                eventos_normalizados.append({
-                    "entity_id": payload.get("entity_id") or payload.get("global_entity_id"),
-                    "source_id": payload.get("source_id") or payload.get("source", "desconhecida"),
-                    "timestamp": ts_ms,
-                    "x": x,
-                    "y": y,
-                    "zone_id": payload.get("zone_id"),
-                    "frame_index": payload.get("frame_index", 0),
-                    "detection_id": payload.get("detection_id", "det-01"),
-                    "confidence": payload.get("confidence", 1.0),
-                    "phase": payload.get("phase", "STARTED"),
-                    "epi_compliance": payload.get("epi_compliance", {}),
-                    "catalog_version": payload.get("catalog_version") or payload.get("epi_compliance", {}).get("catalog_version", "v1.0.0")
-                })
-            
-            # --- 2. EXECUÇÃO DO PIPELINE S2 ---
-            session_id_atual = "sessao-s2-v6c-01"
-            eventos_consolidados = s2.processar_eventos(eventos_normalizados, session_id=session_id_atual)
-            
-            # --- 3. GERAÇÃO DO FICHEIRO DE SAÍDA JSON ---
-            os.makedirs("data/output_s2", exist_ok=True)
-            caminho_saida = "data/output_s2/saida_s2_v6c.json"
-            
-            with open(caminho_saida, 'w', encoding='utf-8') as ficheiro_saida:
-                json.dump(eventos_consolidados, ficheiro_saida, indent=4, ensure_ascii=False)
-                
-            print(f"-> Sucesso! Ficheiro final v6c guardado em: {caminho_saida}")
-            
-        else:
-            print(f"\n[AVISO] O ficheiro '{caminho_ficheiro}' não foi encontrado.")
-
-    executar_teste_com_ficheiro(caminho_saida_s1)
+    raise SystemExit(main())
