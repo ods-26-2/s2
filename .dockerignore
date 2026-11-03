@@ -1,0 +1,39 @@
+
+# Ambientes virtuais
+venv/
+.venv/
+env/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Testes e cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Controle de versão
+.git/
+.gitignore
+
+# IDEs e editores
+.vscode/
+.idea/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários
+*.log
+*.tmp
+
+# Documentação e arquivos auxiliares
+docs/
+*.md
+
+# Arquivos de saída gerados
+data/eventos_s2.json
+data/output_s2/
