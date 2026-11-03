@@ -1,86 +1,165 @@
 [
   {
     "message_type": "event",
-    "schema": "ods.visao.evento_espacial",
+    "schema": "ods.s1.position",
     "schema_version": "1.0",
     "producer": "S1",
-    "published_at": "2026-09-16T10:47:28.100Z",
+    "message_id": "550e8400-e29b-41d4-a716-446655440001",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 1,
+    "captured_at": "2026-11-03T18:00:00.000Z",
+    "published_at": "2026-11-03T18:00:00.000Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
     "payload": {
-      "entity_id": "cam_frontal:1",
-      "source_id": "cam_frontal",
-      "timestamp": "2026-09-16T10:47:28.100Z",
-      "world_coordinates": {
-        "x": 50.9,
-        "y": 25.0
-      }
+      "frame_index": 48213,
+      "positions": [
+        {
+          "track_id": 1,
+          "class": "person",
+          "position_m": {
+            "x": 50.9,
+            "y": 25.0
+          },
+          "space_id": "demo-space-frontal",
+          "zone_ids": []
+        }
+      ]
     }
   },
   {
     "message_type": "event",
-    "schema": "ods.visao.evento_espacial",
+    "schema": "ods.s1.position",
     "schema_version": "1.0",
     "producer": "S1",
-    "published_at": "2026-09-16T10:47:28.200Z",
+    "message_id": "550e8400-e29b-41d4-a716-446655440002",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 2,
+    "captured_at": "2026-11-03T18:00:00.100Z",
+    "published_at": "2026-11-03T18:00:00.100Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
     "payload": {
-      "entity_id": "cam_frontal:1",
-      "source_id": "cam_frontal",
-      "timestamp": "2026-09-16T10:47:28.200Z",
-      "world_coordinates": {
-        "x": 51.1,
-        "y": 25.0
-      }
+      "frame_index": 48214,
+      "positions": [
+        {
+          "track_id": 1,
+          "class": "person",
+          "position_m": {
+            "x": 51.1,
+            "y": 25.0
+          },
+          "space_id": "demo-space-frontal",
+          "zone_ids": []
+        }
+      ]
     }
   },
   {
     "message_type": "event",
-    "schema": "ods.visao.evento_espacial",
+    "schema": "ods.s1.position",
     "schema_version": "1.0",
     "producer": "S1",
-    "published_at": "2026-09-16T10:47:28.300Z",
+    "message_id": "550e8400-e29b-41d4-a716-446655440003",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 3,
+    "captured_at": "2026-11-03T18:00:00.200Z",
+    "published_at": "2026-11-03T18:00:00.200Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
     "payload": {
-      "entity_id": "cam_frontal:1",
-      "source_id": "cam_frontal",
-      "timestamp": "2026-09-16T10:47:28.300Z",
-      "world_coordinates": {
-        "x": 50.8,
-        "y": 25.0
-      }
+      "frame_index": 48215,
+      "positions": [
+        {
+          "track_id": 1,
+          "class": "person",
+          "position_m": {
+            "x": 50.8,
+            "y": 25.0
+          },
+          "space_id": "demo-space-frontal",
+          "zone_ids": []
+        }
+      ]
     }
   },
   {
     "message_type": "event",
-    "schema": "ods.visao.evento_espacial",
+    "schema": "ods.s1.position",
     "schema_version": "1.0",
     "producer": "S1",
-    "published_at": "2026-09-16T10:47:28.400Z",
+    "message_id": "550e8400-e29b-41d4-a716-446655440004",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 4,
+    "captured_at": "2026-11-03T18:00:00.300Z",
+    "published_at": "2026-11-03T18:00:00.300Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
     "payload": {
-      "entity_id": "cam_frontal:99",
-      "source_id": "cam_frontal",
-      "timestamp": "2026-09-16T10:47:28.400Z",
-      "world_coordinates": {
-        "x": 10.0,
-        "y": 10.0
-      }
+      "frame_index": 48216,
+      "positions": [
+        {
+          "track_id": 99,
+          "class": "person",
+          "position_m": {
+            "x": 10.0,
+            "y": 10.0
+          },
+          "space_id": "demo-space-frontal",
+          "zone_ids": []
+        }
+      ]
     }
   },
   {
     "message_type": "event",
-    "schema": "ods.visao.evento_espacial",
+    "schema": "ods.s1.position",
     "schema_version": "1.0",
     "producer": "S1",
-    "published_at": "2026-09-16T10:47:28.500Z",
+    "message_id": "550e8400-e29b-41d4-a716-446655440005",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 5,
+    "captured_at": "2026-11-03T18:00:00.400Z",
+    "published_at": "2026-11-03T18:00:00.400Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
     "payload": {
-      "entity_id": "cam_frontal:99",
-      "source_id": "cam_frontal",
-      "timestamp": "2026-09-16T10:47:28.500Z",
-      "world_coordinates": {
-        "x": 15.0,
-        "y": 10.0
-      },
+      "frame_index": 48217,
+      "positions": [
+        {
+          "track_id": 99,
+          "class": "person",
+          "position_m": {
+            "x": 15.0,
+            "y": 10.0
+          },
+          "space_id": "demo-space-frontal",
+          "zone_ids": [
+            "zona_segura_01"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.s1.zone_transition",
+    "schema_version": "1.0",
+    "producer": "S1",
+    "message_id": "550e8400-e29b-41d4-a716-446655440006",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 6,
+    "captured_at": "2026-11-03T18:00:00.400Z",
+    "published_at": "2026-11-03T18:00:00.400Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
+    "payload": {
+      "track_id": 99,
+      "class": "person",
       "zone_id": "zona_segura_01",
-      "transition": {
-        "type": "entrada"
-      }
+      "transition": "ENTER",
+      "entered_at": "2026-11-03T18:00:00.400Z",
+      "dwell_s": 0
     }
   }
 ]

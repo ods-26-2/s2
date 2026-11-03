@@ -1,0 +1,82 @@
+[
+  {
+    "message_type": "event",
+    "message_id": "c2a37adf-b264-448d-8eb1-0cf5ee181672",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-03T21:11:03.371Z",
+    "captured_at": "2026-11-03T18:00:00.000Z",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 0,
+    "payload": {
+      "entities": []
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1"
+  },
+  {
+    "message_type": "event",
+    "message_id": "4a3ec67b-27c8-4333-bd0c-0940e47e5465",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-03T21:11:03.371Z",
+    "captured_at": "2026-11-03T18:00:00.100Z",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 1,
+    "payload": {
+      "entities": []
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1"
+  },
+  {
+    "message_type": "event",
+    "message_id": "6906755f-8bbc-4f0e-8504-c67565b8af41",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-03T21:11:03.371Z",
+    "captured_at": "2026-11-03T18:00:00.200Z",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 2,
+    "payload": {
+      "entities": []
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1"
+  },
+  {
+    "message_type": "event",
+    "message_id": "b200d9e5-689d-4e13-8af6-bf5faa88ef5d",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-03T21:11:03.371Z",
+    "captured_at": "2026-11-03T18:00:00.300Z",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 3,
+    "payload": {
+      "entities": []
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1"
+  },
+  {
+    "message_type": "event",
+    "message_id": "e89e4c7f-c419-4a60-b50b-a6d1c6bfed68",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-03T21:11:03.371Z",
+    "captured_at": "2026-11-03T18:00:00.400Z",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 4,
+    "payload": {
+      "entities": []
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1"
+  }
+]

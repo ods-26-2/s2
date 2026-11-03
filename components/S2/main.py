@@ -16,16 +16,14 @@ from typing import Any
 try:  # execução como pacote: python -m components.S2.main
     from .config import (
         CAMINHO_ENTRADA_S2, CAMINHO_ENTRADA_S2_FUSAO, CAMINHO_REGRAS_S2,
-        CAMINHO_REGRAS_S2_EXEMPLO, CAMINHO_SAIDA_S2, DIRETORIO_SAIDA_S2,
-        TREINO_MOT20_ESCOLHIDO,
+        CAMINHO_REGRAS_S2_EXEMPLO, CAMINHO_SAIDA_S2,
     )
     from .filtro_ruido_temporal import FiltroRuidoTemporal
     from .motor_estado_concorrente import MotorGerenciamentoEstadoConcorrente
 except ImportError:  # execução direta a partir de components/S2
     from config import (
         CAMINHO_ENTRADA_S2, CAMINHO_ENTRADA_S2_FUSAO, CAMINHO_REGRAS_S2,
-        CAMINHO_REGRAS_S2_EXEMPLO, CAMINHO_SAIDA_S2, DIRETORIO_SAIDA_S2,
-        TREINO_MOT20_ESCOLHIDO,
+        CAMINHO_REGRAS_S2_EXEMPLO, CAMINHO_SAIDA_S2,
     )
     from filtro_ruido_temporal import FiltroRuidoTemporal
     from motor_estado_concorrente import MotorGerenciamentoEstadoConcorrente
