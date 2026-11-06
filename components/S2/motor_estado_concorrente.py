@@ -1,3 +1,4 @@
+
 """Motor do componente S2 — Regras temporais e eventos (arquitetura 6c).
 
 Consome mensagens ods.i2.tracks, ods.s1.position, ods.s1.zone_transition,
@@ -37,7 +38,11 @@ SCHEMAS_CONSUMIDOS = {
     "ods.session.started",
     "ods.s2.rules.command",
 }
-SCHEMAS_POR_QUADRO = {"ods.i2.tracks", "ods.s1.position", "ods.i9.ppe_compliance"}
+SCHEMAS_POR_QUADRO = {
+    "ods.i2.tracks",
+    "ods.s1.position",
+    "ods.i9.ppe_compliance",
+}
 EVENT_TYPES = {
     "ZONE_ENTER", "ZONE_EXIT", "DWELL_EXCEEDED", "OCCUPANCY_ABOVE",
     "OCCUPANCY_BELOW", "PPE_NON_COMPLIANT", "OBJECT_STATIONARY",
@@ -269,7 +274,6 @@ class MotorGerenciamentoEstadoConcorrente:
                 chave = (mensagem["session_id"], mensagem.get("source_id", ""), payload["frame_index"])
                 grupo = quadros.setdefault(chave, {"mensagens": {}, "session_id": chave[0], "source_id": chave[1], "frame_index": chave[2]})
                 if schema == "ods.i9.ppe_compliance":
-                    # O contrato I9 define uma mensagem por pessoa/detection_id e quadro.
                     grupo["mensagens"].setdefault(schema, []).append(mensagem)
                 else:
                     if schema in grupo["mensagens"]:
@@ -296,7 +300,6 @@ class MotorGerenciamentoEstadoConcorrente:
             timeline.append((ts, 1, mensagem))
         for comando in comandos_regras:
             ts = FiltroRuidoTemporal.timestamp_em_ms(comando["published_at"])
-            # A configuracao tem prioridade sobre sinais publicados no mesmo instante.
             timeline.append((ts, -1, comando))
         timeline.sort(key=lambda item: (item[0], item[1]))
 
@@ -366,9 +369,8 @@ class MotorGerenciamentoEstadoConcorrente:
             "payload": resposta,
         }
 
-    # Alias de nomenclatura para chamadas novas; o nome antigo é mantido para
-    # não quebrar os imports existentes no projeto.
     def processar_mensagens(self, mensagens: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Alias de nomenclatura para chamadas novas."""
         return self.fusao_e_deduplicacao(mensagens)
 
     @staticmethod
@@ -412,80 +414,228 @@ class MotorGerenciamentoEstadoConcorrente:
         timestamp_ms: int,
     ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
         observacoes: list[dict[str, Any]] = []
-        # Expira rastros somente depois do TTL. Até lá, um reaparecimento mantém
-        # o mesmo entity_id e evita duplicação após oclusões curtas.
         session_id_batch = batch[0]["session_id"]
         self._expirar_rastros(session_id_batch, timestamp_ms)
         message_ids: list[str] = []
+
         for quadro in batch:
             msgs = quadro["mensagens"]
             if "ods.i2.tracks" not in msgs:
                 # S1/I9 sem I2 não basta para inventar uma identidade.
                 continue
-            tem_mensagem_de_quadro = True
+
             msg_tracks = msgs["ods.i2.tracks"]
             payload_tracks = _payload(msg_tracks)
             tracks = payload_tracks.get("tracks")
             if not isinstance(tracks, list):
                 raise ValueError("ods.i2.tracks exige payload.tracks como array")
+
             msg_posicao = msgs.get("ods.s1.position")
             posicoes: dict[str, dict[str, Any]] = {}
             if msg_posicao:
                 lista_posicoes = _payload(msg_posicao).get("positions")
                 if not isinstance(lista_posicoes, list):
                     raise ValueError("ods.s1.position exige payload.positions como array")
-                posicoes = {str(p["track_id"]): p for p in lista_posicoes if isinstance(p, dict) and "track_id" in p}
+                posicoes = {
+                    str(p["track_id"]): p
+                    for p in lista_posicoes
+                    if isinstance(p, dict) and "track_id" in p
+                }
+
+            # Organiza as avaliações do I9 por detection_id.
             mensagens_ppe = msgs.get("ods.i9.ppe_compliance", [])
             if not isinstance(mensagens_ppe, list):
                 mensagens_ppe = [mensagens_ppe]
+
             ppe_por_detection: dict[int, list[dict[str, Any]]] = {}
+
             for msg_ppe in mensagens_ppe:
                 ppe_payload = _payload(msg_ppe)
+                uncertain_payload = ppe_payload.get("uncertain", False)
+
+                if not isinstance(uncertain_payload, bool):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.uncertain boolean"
+                    )
+
+                def normalizar_itens(
+                    itens: Any,
+                    uncertain: bool,
+                ) -> list[dict[str, Any]]:
+                    if not isinstance(itens, list):
+                        raise ValueError(
+                            "Avaliações de EPI do I9 devem ser um array"
+                        )
+
+                    normalizados: list[dict[str, Any]] = []
+                    for item in itens:
+                        if not isinstance(item, dict):
+                            continue
+
+                        uncertain_item = item.get("uncertain", uncertain)
+                        if not isinstance(uncertain_item, bool):
+                            raise ValueError(
+                                "O campo uncertain de uma avaliação de EPI deve ser boolean"
+                            )
+
+                        normalizados.append({
+                            **item,
+                            "uncertain": uncertain_item,
+                        })
+
+                    return normalizados
+
+                # Formato agregado: vários detection_id na mesma mensagem.
                 for registro in ppe_payload.get("items_by_detection", []):
-                    if isinstance(registro, dict) and isinstance(registro.get("detection_id"), int):
-                        ppe_por_detection[registro["detection_id"]] = registro.get("items", [])
-                # Formato normativo I9: uma mensagem por detection_id/pessoa/quadro.
+                    if (
+                        isinstance(registro, dict)
+                        and isinstance(registro.get("detection_id"), int)
+                        and not isinstance(registro.get("detection_id"), bool)
+                    ):
+                        uncertain_registro = registro.get(
+                            "uncertain", uncertain_payload
+                        )
+                        if not isinstance(uncertain_registro, bool):
+                            raise ValueError(
+                                "O campo uncertain do registro I9 deve ser boolean"
+                            )
+
+                        ppe_por_detection[registro["detection_id"]] = normalizar_itens(
+                            registro.get("items", []),
+                            uncertain_registro,
+                        )
+
+                # Formato normativo: uma mensagem por detection_id.
                 detection_id = ppe_payload.get("detection_id")
-                if isinstance(detection_id, int):
-                    ppe_por_detection[detection_id] = ppe_payload.get("items", [])
-                # Aceita fixtures agregadas sem alterar o contrato normativo.
+                if (
+                    isinstance(detection_id, int)
+                    and not isinstance(detection_id, bool)
+                ):
+                    ppe_por_detection[detection_id] = normalizar_itens(
+                        ppe_payload.get("items", []),
+                        uncertain_payload,
+                    )
+
+                # Compatibilidade com fixtures agregadas de testes.
                 for registro in ppe_payload.get("evaluations", []):
-                    if isinstance(registro, dict) and isinstance(registro.get("detection_id"), int):
-                        ppe_por_detection[registro["detection_id"]] = registro.get("items", [])
+                    if (
+                        isinstance(registro, dict)
+                        and isinstance(registro.get("detection_id"), int)
+                        and not isinstance(registro.get("detection_id"), bool)
+                    ):
+                        uncertain_registro = registro.get(
+                            "uncertain", uncertain_payload
+                        )
+                        if not isinstance(uncertain_registro, bool):
+                            raise ValueError(
+                                "O campo uncertain da avaliação I9 deve ser boolean"
+                            )
+
+                        ppe_por_detection[registro["detection_id"]] = normalizar_itens(
+                            registro.get("items", []),
+                            uncertain_registro,
+                        )
+
             frame_index = quadro["frame_index"]
             session_id = quadro["session_id"]
             source_id = quadro["source_id"]
+
             for valor in msgs.values():
                 lista_mensagens = valor if isinstance(valor, list) else [valor]
-                message_ids.extend(m.get("message_id", "") for m in lista_mensagens)
+                message_ids.extend(
+                    m.get("message_id", "") for m in lista_mensagens
+                )
+
             for track in tracks:
                 if not isinstance(track, dict) or not track.get("track_id"):
                     continue
+
                 track_id = str(track["track_id"])
                 state = track.get("state", "CONFIRMED")
+
                 if state == "LOST":
                     continue
+
+                predicted = track.get("predicted", False)
+                if not isinstance(predicted, bool):
+                    raise ValueError(
+                        "ods.i2.tracks exige tracks[].predicted boolean quando informado"
+                    )
+
                 pos = posicoes.get(track_id, {})
                 point_px = pos.get("point_px", track.get("point_px"))
-                if point_px is None and isinstance(track.get("bbox"), list) and len(track["bbox"]) == 4:
+
+                if (
+                    point_px is None
+                    and isinstance(track.get("bbox"), list)
+                    and len(track["bbox"]) == 4
+                ):
                     x1, y1, x2, y2 = track["bbox"]
-                    point_px = [round((x1 + x2) / 2), int(y2)]
+                    point_px = [
+                        round((x1 + x2) / 2),
+                        int(y2),
+                    ]
+
                 key_rastro = (session_id, source_id, track_id)
                 detection_id = track.get("detection_id")
-                if isinstance(detection_id, int) and detection_id in ppe_por_detection:
-                    itens_validos = {}
+
+                # Uma previsão não deve atualizar a avaliação de EPI.
+                # Somente uma detecção real com avaliação correspondente
+                # atualiza o estado de PPE armazenado para o rastro.
+                if (
+                    not predicted
+                    and isinstance(detection_id, int)
+                    and not isinstance(detection_id, bool)
+                    and detection_id in ppe_por_detection
+                ):
+                    itens_validos: dict[str, dict[str, Any]] = {}
+
                     for item_ppe in ppe_por_detection[detection_id]:
-                        if isinstance(item_ppe, dict) and item_ppe.get("equipment_item"):
-                            itens_validos[str(item_ppe["equipment_item"])] = dict(item_ppe)
+                        if (
+                            isinstance(item_ppe, dict)
+                            and item_ppe.get("equipment_item")
+                        ):
+                            equipamento = str(item_ppe["equipment_item"])
+
+                            itens_validos[equipamento] = {
+                                "equipment_item": equipamento,
+                                "compliance": item_ppe.get("compliance"),
+                                "confidence": float(
+                                    item_ppe.get("confidence", 0.0)
+                                ),
+                                "uncertain": item_ppe.get("uncertain", False),
+                            }
+
                     self._ppe_por_rastro[key_rastro] = itens_validos
-                self.atualizar_estado_memoria({"session_id": session_id, "source_id": source_id, **track})
-                self._ultima_observacao_rastro[key_rastro] = self._captura_ms(msg_tracks)
+
+                self.atualizar_estado_memoria({
+                    "session_id": session_id,
+                    "source_id": source_id,
+                    **track,
+                })
+
+                self._ultima_observacao_rastro[key_rastro] = self._captura_ms(
+                    msg_tracks
+                )
+
+                # Durante predicted, não expõe a avaliação de EPI anterior
+                # como se fosse uma observação atual.
+                ppe_observado = (
+                    []
+                    if predicted
+                    else list(
+                        self._ppe_por_rastro.get(key_rastro, {}).values()
+                    )
+                )
+
                 observacoes.append({
                     "session_id": session_id,
                     "source_id": source_id,
                     "track_id": track_id,
                     "track_key": key_rastro,
-                    "global_id": self._entity_para_rastro(session_id, source_id, track_id),
+                    "global_id": self._entity_para_rastro(
+                        session_id, source_id, track_id
+                    ),
                     "class": track.get("class"),
                     "confidence": float(track.get("confidence", 1.0)),
                     "frame_index": frame_index,
@@ -494,98 +644,191 @@ class MotorGerenciamentoEstadoConcorrente:
                     "position_m": pos.get("position_m"),
                     "space_id": pos.get("space_id"),
                     "zone_ids": list(pos.get("zone_ids", [])),
-                    "ppe": list(self._ppe_por_rastro.get(key_rastro, {}).values()),
+                    "ppe": ppe_observado,
+                    "predicted": predicted,
                     "message_id": msg_tracks["message_id"],
                 })
 
         clusters = self._clusterizar_observacoes(observacoes, timestamp_ms)
-        entidades = [self._montar_entidade(cluster) for cluster in clusters]
-        self._atualizar_historico_entidades(entidades, observacoes, timestamp_ms)
+        entidades = [
+            self._montar_entidade(cluster)
+            for cluster in clusters
+        ]
+        self._atualizar_historico_entidades(
+            entidades, observacoes, timestamp_ms
+        )
+
         session_id = batch[0]["session_id"]
         fontes = sorted({o["source_id"] for o in observacoes})
         fonte_principal = fontes[0] if fontes else batch[0]["source_id"] or None
+
         msg_out = self._envelope_evento(
-            "ods.s2.entity", session_id, timestamp_ms, fonte_principal,
-            ARTIFACT_VERSION_FUSAO, message_ids[0] if message_ids else None,
+            "ods.s2.entity",
+            session_id,
+            timestamp_ms,
+            fonte_principal,
+            ARTIFACT_VERSION_FUSAO,
+            message_ids[0] if message_ids else None,
         )
         msg_out["payload"] = {"entities": entidades}
+
         return msg_out, entidades, observacoes
 
     def _clusterizar_observacoes(
-        self, observacoes: list[dict[str, Any]], timestamp_ms: int
+        self,
+        observacoes: list[dict[str, Any]],
+        timestamp_ms: int,
     ) -> list[list[dict[str, Any]]]:
         clusters: list[list[dict[str, Any]]] = []
-        for obs in sorted(observacoes, key=lambda o: (o["timestamp_ms"], o["source_id"], o["track_id"])):
+
+        for obs in sorted(
+            observacoes,
+            key=lambda o: (
+                o["timestamp_ms"],
+                o["source_id"],
+                o["track_id"],
+            ),
+        ):
             encaixe: list[dict[str, Any]] | None = None
+
             if obs.get("position_m") is not None and obs.get("space_id"):
                 for cluster in clusters:
-                    if any(item["source_id"] == obs["source_id"] for item in cluster):
+                    if any(
+                        item["source_id"] == obs["source_id"]
+                        for item in cluster
+                    ):
                         continue
-                    referencia = next((item for item in cluster if item.get("position_m") is not None and item.get("space_id") == obs["space_id"]), None)
+
+                    referencia = next(
+                        (
+                            item
+                            for item in cluster
+                            if item.get("position_m") is not None
+                            and item.get("space_id") == obs["space_id"]
+                        ),
+                        None,
+                    )
+
                     if referencia is None:
                         continue
-                    delta_t = abs(obs["timestamp_ms"] - referencia["timestamp_ms"])
+
+                    delta_t = abs(
+                        obs["timestamp_ms"] - referencia["timestamp_ms"]
+                    )
                     if delta_t > self.time_sync_threshold_ms:
                         continue
+
                     x1, y1 = obs["position_m"]
                     x2, y2 = referencia["position_m"]
-                    if math.hypot(float(x1) - float(x2), float(y1) - float(y2)) <= self.merge_distance_threshold:
+
+                    if (
+                        math.hypot(
+                            float(x1) - float(x2),
+                            float(y1) - float(y2),
+                        )
+                        <= self.merge_distance_threshold
+                    ):
                         encaixe = cluster
                         break
+
             if encaixe is None:
                 clusters.append([obs])
             else:
                 encaixe.append(obs)
+
         for cluster in clusters:
             if len(cluster) > 1:
-                ids = sorted({obs["global_id"] for obs in cluster})
+                ids = sorted({
+                    obs["global_id"]
+                    for obs in cluster
+                })
                 canonical = ids[0]
+
                 for obs in cluster:
                     obs["global_id"] = canonical
                     self._track_to_entity[obs["track_key"]] = canonical
 
-        # Reidentifica um rastro novo quando o rastro anterior terminou/trocou de
-        # ID, mas a entidade reaparece dentro do TTL e na mesma região. A associação
-        # métrica exige o mesmo space_id; sem calibração, só compara pixels da mesma
-        # câmera, com um limiar próprio em pixels.
-        ids_ativos = {obs["global_id"] for cluster in clusters for obs in cluster}
+        ids_ativos = {
+            obs["global_id"]
+            for cluster in clusters
+            for obs in cluster
+        }
         ids_reutilizados: set[str] = set()
+
         for cluster in clusters:
-            ids_cluster = {obs["global_id"] for obs in cluster}
-            if any(entity_id in self._estado_entidades for entity_id in ids_cluster):
+            ids_cluster = {
+                obs["global_id"]
+                for obs in cluster
+            }
+
+            if any(
+                entity_id in self._estado_entidades
+                for entity_id in ids_cluster
+            ):
                 continue
+
             melhor: tuple[float, str] | None = None
-            session_id_cluster = cluster[0]["session_id"] if cluster else None
+            session_id_cluster = (
+                cluster[0]["session_id"] if cluster else None
+            )
+
             for entity_id, anterior in self._estado_entidades.items():
                 if anterior.get("session_id") != session_id_cluster:
                     continue
                 if entity_id in ids_ativos or entity_id in ids_reutilizados:
                     continue
+
                 delta_t = timestamp_ms - int(anterior["last_seen_ms"])
                 if delta_t < 0 or delta_t > self.ttl_threshold_ms:
                     continue
+
                 for obs in cluster:
-                    if anterior.get("class") and obs.get("class") != anterior.get("class"):
+                    if (
+                        anterior.get("class")
+                        and obs.get("class") != anterior.get("class")
+                    ):
                         continue
+
                     distancia: float | None = None
-                    if (obs.get("position_m") is not None and anterior.get("position_m") is not None
-                            and obs.get("space_id") == anterior.get("space_id")):
+
+                    if (
+                        obs.get("position_m") is not None
+                        and anterior.get("position_m") is not None
+                        and obs.get("space_id") == anterior.get("space_id")
+                    ):
                         a, b = obs["position_m"], anterior["position_m"]
-                        distancia = math.hypot(float(a[0]) - float(b[0]), float(a[1]) - float(b[1]))
+                        distancia = math.hypot(
+                            float(a[0]) - float(b[0]),
+                            float(a[1]) - float(b[1]),
+                        )
                         limite = self.merge_distance_threshold
-                    elif (obs.get("point_px") is not None and anterior.get("point_px") is not None
-                          and obs.get("source_id") == anterior.get("source_id")
-                          and not obs.get("position_m") and not anterior.get("position_m")):
+
+                    elif (
+                        obs.get("point_px") is not None
+                        and anterior.get("point_px") is not None
+                        and obs.get("source_id") == anterior.get("source_id")
+                        and not obs.get("position_m")
+                        and not anterior.get("position_m")
+                    ):
                         a, b = obs["point_px"], anterior["point_px"]
-                        distancia = math.hypot(float(a[0]) - float(b[0]), float(a[1]) - float(b[1]))
+                        distancia = math.hypot(
+                            float(a[0]) - float(b[0]),
+                            float(a[1]) - float(b[1]),
+                        )
                         limite = float(REIDENTIFICACAO_PIXELS)
+
                     else:
                         continue
-                    if distancia <= limite and (melhor is None or distancia < melhor[0]):
+
+                    if distancia <= limite and (
+                        melhor is None or distancia < melhor[0]
+                    ):
                         melhor = (distancia, entity_id)
+
             if melhor is not None:
                 entity_id = melhor[1]
                 ids_reutilizados.add(entity_id)
+
                 for obs in cluster:
                     obs["global_id"] = entity_id
                     self._track_to_entity[obs["track_key"]] = entity_id
@@ -593,17 +836,25 @@ class MotorGerenciamentoEstadoConcorrente:
         return clusters
 
     def _atualizar_historico_entidades(
-        self, entidades: list[dict[str, Any]], observacoes: list[dict[str, Any]], timestamp_ms: int
+        self,
+        entidades: list[dict[str, Any]],
+        observacoes: list[dict[str, Any]],
+        timestamp_ms: int,
     ) -> None:
         por_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
         for obs in observacoes:
             por_id[obs["global_id"]].append(obs)
+
         for entidade in entidades:
             entity_id = entidade["entity_id"]
             obs = por_id.get(entity_id, [])
             referencia = obs[0] if obs else {}
+
             self._estado_entidades[entity_id] = {
-                "session_id": (obs[0].get("session_id") if obs else None),
+                "session_id": (
+                    obs[0].get("session_id") if obs else None
+                ),
                 "last_seen_ms": timestamp_ms,
                 "class": entidade.get("class"),
                 "position_m": entidade.get("position_m"),
@@ -613,47 +864,114 @@ class MotorGerenciamentoEstadoConcorrente:
                 "zone_ids": entidade.get("zone_ids", []),
             }
 
-    def _montar_entidade(self, cluster: list[dict[str, Any]]) -> dict[str, Any]:
-        fontes = sorted({obs["source_id"] for obs in cluster})
-        zonas = sorted({zona for obs in cluster for zona in obs.get("zone_ids", [])})
+    def _montar_entidade(
+        self,
+        cluster: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        fontes = sorted({
+            obs["source_id"]
+            for obs in cluster
+        })
+        zonas = sorted({
+            zona
+            for obs in cluster
+            for zona in obs.get("zone_ids", [])
+        })
+
         entidade: dict[str, Any] = {
-            "entity_id": sorted(obs["global_id"] for obs in cluster)[0],
-            "class": next((obs["class"] for obs in cluster if obs.get("class")), "unknown"),
+            "entity_id": sorted(
+                obs["global_id"] for obs in cluster
+            )[0],
+            "class": next(
+                (
+                    obs["class"]
+                    for obs in cluster
+                    if obs.get("class")
+                ),
+                "unknown",
+            ),
             "zone_ids": zonas,
             "source_ids": fontes,
             "track_refs": [
-                {"source_id": obs["source_id"], "track_id": obs["track_id"]}
-                for obs in sorted(cluster, key=lambda o: (o["source_id"], o["track_id"]))
+                {
+                    "source_id": obs["source_id"],
+                    "track_id": obs["track_id"],
+                }
+                for obs in sorted(
+                    cluster,
+                    key=lambda o: (
+                        o["source_id"],
+                        o["track_id"],
+                    ),
+                )
             ],
         }
-        metricas = [obs for obs in cluster if obs.get("position_m") is not None and obs.get("space_id")]
-        spaces = {obs["space_id"] for obs in metricas}
+
+        metricas = [
+            obs
+            for obs in cluster
+            if obs.get("position_m") is not None
+            and obs.get("space_id")
+        ]
+        spaces = {
+            obs["space_id"]
+            for obs in metricas
+        }
+
         if metricas and len(spaces) == 1:
             entidade["position_m"] = [
-                round(sum(float(obs["position_m"][i]) for obs in metricas) / len(metricas), 3)
+                round(
+                    sum(
+                        float(obs["position_m"][i])
+                        for obs in metricas
+                    ) / len(metricas),
+                    3,
+                )
                 for i in (0, 1)
             ]
             entidade["space_id"] = next(iter(spaces))
+
         elif len(fontes) == 1:
-            point = next((obs.get("point_px") for obs in cluster if obs.get("point_px") is not None), None)
+            point = next(
+                (
+                    obs.get("point_px")
+                    for obs in cluster
+                    if obs.get("point_px") is not None
+                ),
+                None,
+            )
             if point is not None:
-                entidade["point_px"] = [int(round(float(point[0]))), int(round(float(point[1])))]
-        # Em uma fusão multicâmera só expõe coordenadas métricas quando compartilham
-        # o mesmo referencial; pixels de câmeras diferentes nunca são comparados.
+                entidade["point_px"] = [
+                    int(round(float(point[0]))),
+                    int(round(float(point[1]))),
+                ]
+
         if len(fontes) > 1 and "position_m" not in entidade:
             entidade.pop("point_px", None)
+
+        # Consolida avaliações de EPI sem descartar o campo uncertain.
         ppe: dict[str, dict[str, Any]] = {}
-        for obs in sorted(cluster, key=lambda o: o["timestamp_ms"]):
+
+        for obs in sorted(
+            cluster,
+            key=lambda o: o["timestamp_ms"],
+        ):
             for item in obs.get("ppe", []):
                 equipamento = item.get("equipment_item")
+
                 if equipamento:
                     ppe[str(equipamento)] = {
                         "equipment_item": str(equipamento),
                         "compliance": item.get("compliance"),
-                        "confidence": float(item.get("confidence", 0.0)),
+                        "confidence": float(
+                            item.get("confidence", 0.0)
+                        ),
+                        "uncertain": item.get("uncertain", False) is True,
                     }
+
         if ppe:
             entidade["ppe"] = list(ppe.values())
+
         return entidade
 
     def _avaliar_regras_por_entidade(
@@ -665,109 +983,287 @@ class MotorGerenciamentoEstadoConcorrente:
     ) -> list[dict[str, Any]]:
         saida: list[dict[str, Any]] = []
         observacoes_por_entity: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
         for obs in observacoes:
             observacoes_por_entity[obs["global_id"]].append(obs)
+
         session_id = batch[0]["session_id"]
-        entidades_vistas = {e["entity_id"] for e in entidades}
+
         for entidade in entidades:
             entity_id = entidade["entity_id"]
             obs_entity = observacoes_por_entity.get(entity_id, [])
             self._ultima_observacao_entidade[(session_id, entity_id)] = timestamp_ms
+
             for regra in self.regras:
                 tipo = regra["event_type"]
-                classe_ok = not regra.get("class") or entidade.get("class") == regra.get("class")
+                classe_ok = (
+                    not regra.get("class")
+                    or entidade.get("class") == regra.get("class")
+                )
                 zona_regra = regra.get("zone_id")
                 zonas = entidade.get("zone_ids", [])
                 zona_ok = not zona_regra or zona_regra in zonas
+
                 context_base = {
                     "entity_id": entity_id,
                     "class": entidade.get("class"),
-                    "zone_id": zona_regra or (zonas[0] if len(zonas) == 1 else None),
+                    "zone_id": (
+                        zona_regra
+                        or (zonas[0] if len(zonas) == 1 else None)
+                    ),
                     "source_ids": entidade.get("source_ids", []),
-                    "message_id": obs_entity[0]["message_id"] if obs_entity else None,
-                    "confidence": min((obs["confidence"] for obs in obs_entity), default=1.0),
+                    "message_id": (
+                        obs_entity[0]["message_id"]
+                        if obs_entity else None
+                    ),
+                    "confidence": min(
+                        (
+                            obs["confidence"]
+                            for obs in obs_entity
+                        ),
+                        default=1.0,
+                    ),
                 }
+
                 if tipo == "PPE_NON_COMPLIANT":
                     equipamento_regra = regra.get("equipment_item")
-                    ppe_by_item = {i.get("equipment_item"): i for i in entidade.get("ppe", [])}
-                    equipamentos = [equipamento_regra] if equipamento_regra else list(ppe_by_item)
+                    ppe_by_item = {
+                        i.get("equipment_item"): i
+                        for i in entidade.get("ppe", [])
+                    }
+
+                    equipamentos = (
+                        [equipamento_regra]
+                        if equipamento_regra
+                        else list(ppe_by_item)
+                    )
+
                     for equipamento in equipamentos:
                         ppe = ppe_by_item.get(equipamento)
+
                         if ppe is None:
-                            # Sem observação de I9 não se infere conformidade nem ausência.
+                            # Sem observação de I9 não se infere
+                            # conformidade nem ausência.
                             continue
+
                         compliance = ppe.get("compliance")
-                        condicao = compliance in {"ABSENT", "INCORRECT"} and classe_ok and zona_ok
-                        confidence = float(ppe.get("confidence", 0.0))
-                        if ppe.get("uncertain") is True:
-                            confidence = min(confidence, float(regra["uncertain_below"]))
-                        contexto = {**context_base, "equipment_item": equipamento, "confidence": confidence,
-                                    "details": {"compliance": compliance, "min_duration_ms": regra["min_duration_ms"]}}
-                        saida.extend(self._atualizar_condicao(regra, (entity_id, equipamento), condicao,
-                                                              timestamp_ms, contexto, session_id))
+                        condicao = (
+                            compliance in {"ABSENT", "INCORRECT"}
+                            and classe_ok
+                            and zona_ok
+                        )
+
+                        confidence = float(
+                            ppe.get("confidence", 0.0)
+                        )
+                        uncertain = ppe.get("uncertain") is True
+
+                        contexto = {
+                            **context_base,
+                            "equipment_item": equipamento,
+                            "confidence": confidence,
+                            "uncertain": uncertain,
+                            "details": {
+                                "compliance": compliance,
+                                "min_duration_ms": regra["min_duration_ms"],
+                                "uncertain": uncertain,
+                            },
+                        }
+
+                        saida.extend(
+                            self._atualizar_condicao(
+                                regra,
+                                (entity_id, equipamento),
+                                condicao,
+                                timestamp_ms,
+                                contexto,
+                                session_id,
+                            )
+                        )
+
                 elif tipo == "DWELL_EXCEEDED":
                     if not classe_ok:
                         continue
-                    zonas_avaliadas = [zona_regra] if zona_regra else zonas
+
+                    zonas_avaliadas = (
+                        [zona_regra]
+                        if zona_regra
+                        else zonas
+                    )
+
                     for zona in zonas_avaliadas:
                         if not zona:
                             continue
-                        chave_zona = (session_id, f"{entity_id}:{zona}")
+
+                        chave_zona = (
+                            session_id,
+                            f"{entity_id}:{zona}",
+                        )
+
                         if zona in zonas:
-                            inicio = self._inicio_zona.setdefault(chave_zona, timestamp_ms)
-                            threshold_ms = int(float(regra.get("threshold", 0)) * 1000)
-                            duracao_zona = max(0, timestamp_ms - inicio)
+                            inicio = self._inicio_zona.setdefault(
+                                chave_zona,
+                                timestamp_ms,
+                            )
+                            threshold_ms = int(
+                                float(regra.get("threshold", 0)) * 1000
+                            )
+                            duracao_zona = max(
+                                0,
+                                timestamp_ms - inicio,
+                            )
                             condicao = duracao_zona >= threshold_ms
+
                         else:
                             condicao = False
                             inicio = timestamp_ms
                             duracao_zona = 0
                             self._inicio_zona.pop(chave_zona, None)
-                        contexto = {**context_base, "zone_id": zona, "details": {"dwell_s": int(duracao_zona // 1000)}}
-                        saida.extend(self._atualizar_condicao(regra, (entity_id, zona), condicao,
-                                                              timestamp_ms, contexto, session_id))
+
+                        contexto = {
+                            **context_base,
+                            "zone_id": zona,
+                            "details": {
+                                "dwell_s": int(duracao_zona // 1000)
+                            },
+                        }
+
+                        saida.extend(
+                            self._atualizar_condicao(
+                                regra,
+                                (entity_id, zona),
+                                condicao,
+                                timestamp_ms,
+                                contexto,
+                                session_id,
+                            )
+                        )
+
                 elif tipo == "OBJECT_STATIONARY":
                     if not classe_ok or not zona_ok:
                         continue
-                    localizacao = entidade.get("position_m") or entidade.get("point_px")
+
+                    localizacao = (
+                        entidade.get("position_m")
+                        or entidade.get("point_px")
+                    )
+
                     if not localizacao or regra.get("threshold") is None:
                         continue
-                    unidade = "m" if entidade.get("position_m") else "px"
+
+                    unidade = (
+                        "m"
+                        if entidade.get("position_m")
+                        else "px"
+                    )
                     key = (session_id, entity_id)
-                    atual_x, atual_y = float(localizacao[0]), float(localizacao[1])
+                    atual_x = float(localizacao[0])
+                    atual_y = float(localizacao[1])
                     base = self._posicao_base.get(key)
+
                     if base is None or base[3] != unidade:
-                        self._posicao_base[key] = (timestamp_ms, atual_x, atual_y, unidade)
+                        self._posicao_base[key] = (
+                            timestamp_ms,
+                            atual_x,
+                            atual_y,
+                            unidade,
+                        )
                         deslocamento = 0.0
                         duracao = 0
+
                     else:
                         inicio, x0, y0, _ = base
-                        deslocamento = math.hypot(atual_x - x0, atual_y - y0)
-                        duracao = max(0, timestamp_ms - inicio)
+                        deslocamento = math.hypot(
+                            atual_x - x0,
+                            atual_y - y0,
+                        )
+                        duracao = max(
+                            0,
+                            timestamp_ms - inicio,
+                        )
+
                         if deslocamento > float(regra["threshold"]):
-                            self._posicao_base[key] = (timestamp_ms, atual_x, atual_y, unidade)
+                            self._posicao_base[key] = (
+                                timestamp_ms,
+                                atual_x,
+                                atual_y,
+                                unidade,
+                            )
                             duracao = 0
-                    condicao = deslocamento <= float(regra["threshold"]) and duracao >= int(regra["min_duration_ms"])
-                    contexto = {**context_base, "details": {f"displacement_{unidade}": round(deslocamento, 3)}}
-                    saida.extend(self._atualizar_condicao(regra, (entity_id,), condicao,
-                                                          timestamp_ms, contexto, session_id,
-                                                          persistencia_override_ms=0))
+
+                    condicao = (
+                        deslocamento <= float(regra["threshold"])
+                        and duracao >= int(regra["min_duration_ms"])
+                    )
+
+                    contexto = {
+                        **context_base,
+                        "details": {
+                            f"displacement_{unidade}": round(
+                                deslocamento, 3
+                            )
+                        },
+                    }
+
+                    saida.extend(
+                        self._atualizar_condicao(
+                            regra,
+                            (entity_id,),
+                            condicao,
+                            timestamp_ms,
+                            contexto,
+                            session_id,
+                            persistencia_override_ms=0,
+                        )
+                    )
+
                 elif tipo == "CROSS_CAMERA_MATCH":
-                    condicao = classe_ok and len(entidade.get("source_ids", [])) >= 2
-                    chave_condicao = (session_id, regra["rule_id"], entity_id)
+                    condicao = (
+                        classe_ok
+                        and len(entidade.get("source_ids", [])) >= 2
+                    )
+
+                    chave_condicao = (
+                        session_id,
+                        regra["rule_id"],
+                        entity_id,
+                    )
                     estado_match = self._condicoes.get(chave_condicao)
-                    # Se uma das câmeras perder o objeto, não encerra imediatamente
-                    # o match: mantém a condição enquanto a identidade estiver dentro
-                    # do TTL. Se a segunda fonte reaparecer, o mesmo evento continua.
+
                     dentro_ttl = bool(
-                        estado_match and timestamp_ms - int(estado_match.get("last_seen_ms", timestamp_ms))
+                        estado_match
+                        and timestamp_ms
+                        - int(
+                            estado_match.get(
+                                "last_seen_ms",
+                                timestamp_ms,
+                            )
+                        )
                         <= self.ttl_threshold_ms
                     )
+
                     if condicao or not dentro_ttl:
-                        contexto = {**context_base, "confidence": context_base["confidence"],
-                                    "details": {"source_ids": entidade.get("source_ids", [])}}
-                        saida.extend(self._atualizar_condicao(regra, (entity_id,), condicao,
-                                                              timestamp_ms, contexto, session_id))
+                        contexto = {
+                            **context_base,
+                            "confidence": context_base["confidence"],
+                            "details": {
+                                "source_ids": entidade.get(
+                                    "source_ids", []
+                                )
+                            },
+                        }
+
+                        saida.extend(
+                            self._atualizar_condicao(
+                                regra,
+                                (entity_id,),
+                                condicao,
+                                timestamp_ms,
+                                contexto,
+                                session_id,
+                            )
+                        )
+
         return saida
 
     def _atualizar_condicao(
@@ -783,18 +1279,37 @@ class MotorGerenciamentoEstadoConcorrente:
         rule_id = regra["rule_id"]
         chave = (session_id, rule_id, *identidade)
         saida: list[dict[str, Any]] = []
+
         if not ativa:
             estado = self._condicoes.get(chave)
+
             if estado and estado.get("event_id"):
-                saida.append(self._emitir_evento(regra, estado, "ENDED", timestamp_ms, session_id, contexto))
+                saida.append(
+                    self._emitir_evento(
+                        regra,
+                        estado,
+                        "ENDED",
+                        timestamp_ms,
+                        session_id,
+                        contexto,
+                    )
+                )
+
             self._condicoes.pop(chave, None)
-            self.filtro_temporal.atualizar_persistencia(chave, False, timestamp_ms, 0)
+            self.filtro_temporal.atualizar_persistencia(
+                chave, False, timestamp_ms, 0
+            )
             return saida
-        confidence = float(contexto.get("confidence", 1.0))
+
+        confidence = float(
+            contexto.get("confidence", 1.0)
+        )
+
         if confidence < float(regra["min_confidence"]):
-            # Evidência abaixo do limiar é ignorada; não cria condição nova.
             return []
+
         estado = self._condicoes.get(chave)
+
         if estado is None:
             estado = {
                 "first_seen_ms": timestamp_ms,
@@ -804,23 +1319,74 @@ class MotorGerenciamentoEstadoConcorrente:
                 "contexto": dict(contexto),
             }
             self._condicoes[chave] = estado
+
         else:
             estado["last_seen_ms"] = timestamp_ms
             estado["contexto"] = dict(contexto)
-        min_duration = int(regra["min_duration_ms"] if persistencia_override_ms is None else persistencia_override_ms)
-        duracao = max(0, timestamp_ms - int(estado["first_seen_ms"]))
-        persistiu, _ = self.filtro_temporal.atualizar_persistencia(chave, True, timestamp_ms, min_duration)
+
+        min_duration = int(
+            regra["min_duration_ms"]
+            if persistencia_override_ms is None
+            else persistencia_override_ms
+        )
+
+        duracao = max(
+            0,
+            timestamp_ms - int(estado["first_seen_ms"]),
+        )
+
+        persistiu, _ = self.filtro_temporal.atualizar_persistencia(
+            chave,
+            True,
+            timestamp_ms,
+            min_duration,
+        )
+
         if not estado.get("event_id") and persistiu:
-            if self.filtro_temporal.aplicar_debounce(chave, timestamp_ms, int(regra["debounce_ms"])):
+            if self.filtro_temporal.aplicar_debounce(
+                chave,
+                timestamp_ms,
+                int(regra["debounce_ms"]),
+            ):
                 estado["event_id"] = str(uuid.uuid4())
                 estado["last_emitted_ms"] = timestamp_ms
-                saida.append(self._emitir_evento(regra, estado, "STARTED", timestamp_ms, session_id, contexto))
+
+                saida.append(
+                    self._emitir_evento(
+                        regra,
+                        estado,
+                        "STARTED",
+                        timestamp_ms,
+                        session_id,
+                        contexto,
+                    )
+                )
+
         elif estado.get("event_id"):
             debounce_ms = int(regra["debounce_ms"])
-            if estado["last_emitted_ms"] is None or timestamp_ms - estado["last_emitted_ms"] >= debounce_ms:
-                if self.filtro_temporal.aplicar_debounce(chave, timestamp_ms, debounce_ms):
+
+            if (
+                estado["last_emitted_ms"] is None
+                or timestamp_ms - estado["last_emitted_ms"] >= debounce_ms
+            ):
+                if self.filtro_temporal.aplicar_debounce(
+                    chave,
+                    timestamp_ms,
+                    debounce_ms,
+                ):
                     estado["last_emitted_ms"] = timestamp_ms
-                    saida.append(self._emitir_evento(regra, estado, "UPDATED", timestamp_ms, session_id, contexto))
+
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            estado,
+                            "UPDATED",
+                            timestamp_ms,
+                            session_id,
+                            contexto,
+                        )
+                    )
+
         return saida
 
     def _emitir_evento(
@@ -832,14 +1398,36 @@ class MotorGerenciamentoEstadoConcorrente:
         session_id: str,
         contexto: dict[str, Any],
     ) -> dict[str, Any]:
-        confidence = min(1.0, max(0.0, float(contexto.get("confidence", 1.0))))
-        status = "UNCERTAIN" if confidence < float(regra["uncertain_below"]) else "CONFIRMED"
-        fontes = sorted(set(contexto.get("source_ids") or []))
+        confidence = min(
+            1.0,
+            max(0.0, float(contexto.get("confidence", 1.0))),
+        )
+
+        # Uma avaliação explicitamente incerta pelo I9 deve continuar
+        # marcada como UNCERTAIN, mesmo que sua confiança seja alta.
+        status = (
+            "UNCERTAIN"
+            if (
+                contexto.get("uncertain") is True
+                or confidence < float(regra["uncertain_below"])
+            )
+            else "CONFIRMED"
+        )
+
+        fontes = sorted(
+            set(contexto.get("source_ids") or [])
+        )
         fonte = fontes[0] if fontes else None
+
         msg = self._envelope_evento(
-            "ods.s2.event", session_id, timestamp_ms, fonte, self.artifact_version_regras,
+            "ods.s2.event",
+            session_id,
+            timestamp_ms,
+            fonte,
+            self.artifact_version_regras,
             contexto.get("message_id"),
         )
+
         payload: dict[str, Any] = {
             "event_id": estado["event_id"],
             "event_type": regra["event_type"],
@@ -848,100 +1436,228 @@ class MotorGerenciamentoEstadoConcorrente:
             "phase": phase,
             "confidence": round(confidence, 4),
         }
-        for campo in ("entity_id", "class", "zone_id", "equipment_item"):
+
+        for campo in (
+            "entity_id",
+            "class",
+            "zone_id",
+            "equipment_item",
+        ):
             if contexto.get(campo) is not None:
                 payload[campo] = contexto[campo]
-        payload["started_at"] = _iso_de_ms(int(estado["first_seen_ms"]))
-        payload["duration_ms"] = max(0, timestamp_ms - int(estado["first_seen_ms"]))
+
+        payload["started_at"] = _iso_de_ms(
+            int(estado["first_seen_ms"])
+        )
+        payload["duration_ms"] = max(
+            0,
+            timestamp_ms - int(estado["first_seen_ms"]),
+        )
         payload["source_ids"] = fontes
+
         details = contexto.get("details")
         if isinstance(details, dict) and details:
             payload["details"] = details
+
         msg["payload"] = payload
         return msg
 
-    def _processar_transicao_zona(self, mensagem: dict[str, Any], timestamp_ms: int) -> list[dict[str, Any]]:
+    def _processar_transicao_zona(
+        self,
+        mensagem: dict[str, Any],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
         payload = _payload(mensagem)
         transicao = payload.get("transition")
         zona = payload.get("zone_id")
         source_id = mensagem.get("source_id")
         session_id = mensagem["session_id"]
         track_id = str(payload.get("track_id", ""))
+
         if transicao not in {"ENTER", "EXIT"} or not zona or not track_id:
-            raise ValueError("ods.s1.zone_transition exige track_id, zone_id e transition ENTER/EXIT")
-        entity_id = self._entity_para_rastro(session_id, str(source_id or ""), track_id)
+            raise ValueError(
+                "ods.s1.zone_transition exige track_id, zone_id e transition ENTER/EXIT"
+            )
+
+        entity_id = self._entity_para_rastro(
+            session_id,
+            str(source_id or ""),
+            track_id,
+        )
         fontes = [str(source_id)] if source_id else []
         saida: list[dict[str, Any]] = []
         classe = payload.get("class")
+
         for regra in self.regras:
             tipo = regra["event_type"]
+
             if tipo not in {"ZONE_ENTER", "ZONE_EXIT"}:
                 continue
             if regra.get("class") and regra["class"] != classe:
                 continue
             if regra.get("zone_id") and regra["zone_id"] != zona:
                 continue
+
             contexto = {
-                "entity_id": entity_id, "class": classe, "zone_id": zona,
-                "source_ids": fontes, "message_id": mensagem["message_id"], "confidence": 1.0,
+                "entity_id": entity_id,
+                "class": classe,
+                "zone_id": zona,
+                "source_ids": fontes,
+                "message_id": mensagem["message_id"],
+                "confidence": 1.0,
                 "details": {},
             }
+
             if tipo == "ZONE_ENTER" and transicao == "ENTER":
-                # A transição já foi confirmada pela histerese/persistência de S1.
-                saida.extend(self._atualizar_condicao(regra, (entity_id, zona), True, timestamp_ms,
-                                                      contexto, session_id, persistencia_override_ms=0))
+                saida.extend(
+                    self._atualizar_condicao(
+                        regra,
+                        (entity_id, zona),
+                        True,
+                        timestamp_ms,
+                        contexto,
+                        session_id,
+                        persistencia_override_ms=0,
+                    )
+                )
+
             elif tipo == "ZONE_ENTER" and transicao == "EXIT":
-                saida.extend(self._atualizar_condicao(regra, (entity_id, zona), False, timestamp_ms,
-                                                      contexto, session_id))
+                saida.extend(
+                    self._atualizar_condicao(
+                        regra,
+                        (entity_id, zona),
+                        False,
+                        timestamp_ms,
+                        contexto,
+                        session_id,
+                    )
+                )
+
             elif tipo == "ZONE_EXIT" and transicao == "EXIT":
-                eventos_start = self._atualizar_condicao(regra, (entity_id, zona), True, timestamp_ms,
-                                                         contexto, session_id, persistencia_override_ms=0)
+                eventos_start = self._atualizar_condicao(
+                    regra,
+                    (entity_id, zona),
+                    True,
+                    timestamp_ms,
+                    contexto,
+                    session_id,
+                    persistencia_override_ms=0,
+                )
                 saida.extend(eventos_start)
-                # Saída é uma ocorrência pontual; encerra o mesmo event_id no instante da saída.
-                chave = (session_id, regra["rule_id"], entity_id, zona)
+
+                chave = (
+                    session_id,
+                    regra["rule_id"],
+                    entity_id,
+                    zona,
+                )
                 estado = self._condicoes.get(chave)
+
                 if estado and estado.get("event_id"):
-                    saida.append(self._emitir_evento(regra, estado, "ENDED", timestamp_ms, session_id, contexto))
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            estado,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            contexto,
+                        )
+                    )
+
                 self._condicoes.pop(chave, None)
+
         return saida
 
-    def _processar_ocupacao(self, mensagem: dict[str, Any], timestamp_ms: int) -> list[dict[str, Any]]:
+    def _processar_ocupacao(
+        self,
+        mensagem: dict[str, Any],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
         payload = _payload(mensagem)
         zona = payload.get("zone_id")
         count = payload.get("count")
-        if not isinstance(zona, str) or not isinstance(count, int) or isinstance(count, bool):
-            raise ValueError("ods.s1.zone_occupancy exige zone_id string e count integer")
+
+        if (
+            not isinstance(zona, str)
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+        ):
+            raise ValueError(
+                "ods.s1.zone_occupancy exige zone_id string e count integer"
+            )
+
         session_id = mensagem["session_id"]
         fonte = mensagem.get("source_id")
         chave_zona = (session_id, zona)
         anterior = self._contagem_zonas.get(chave_zona)
         self._contagem_zonas[chave_zona] = count
         saida: list[dict[str, Any]] = []
+
         if anterior is None:
             return saida
+
         for regra in self.regras:
             tipo = regra["event_type"]
             threshold = regra.get("threshold")
+
             if tipo not in {"OCCUPANCY_ABOVE", "OCCUPANCY_BELOW"} or threshold is None:
                 continue
             if regra.get("zone_id") and regra["zone_id"] != zona:
                 continue
-            cruzou = (tipo == "OCCUPANCY_ABOVE" and anterior <= threshold < count) or (tipo == "OCCUPANCY_BELOW" and anterior >= threshold > count)
+
+            cruzou = (
+                tipo == "OCCUPANCY_ABOVE"
+                and anterior <= threshold < count
+            ) or (
+                tipo == "OCCUPANCY_BELOW"
+                and anterior >= threshold > count
+            )
+
             contexto = {
-                "class": regra.get("class"), "zone_id": zona, "source_ids": [fonte] if fonte else [],
-                "message_id": mensagem["message_id"], "confidence": 1.0,
+                "class": regra.get("class"),
+                "zone_id": zona,
+                "source_ids": [fonte] if fonte else [],
+                "message_id": mensagem["message_id"],
+                "confidence": 1.0,
                 "details": {"count": count},
             }
+
             chave = (zona,)
+
             if cruzou:
-                eventos_start = self._atualizar_condicao(regra, chave, True, timestamp_ms, contexto,
-                                                         session_id, persistencia_override_ms=0)
+                eventos_start = self._atualizar_condicao(
+                    regra,
+                    chave,
+                    True,
+                    timestamp_ms,
+                    contexto,
+                    session_id,
+                    persistencia_override_ms=0,
+                )
                 saida.extend(eventos_start)
-                estado_key = (session_id, regra["rule_id"], *chave)
+
+                estado_key = (
+                    session_id,
+                    regra["rule_id"],
+                    *chave,
+                )
                 estado = self._condicoes.get(estado_key)
+
                 if estado and estado.get("event_id"):
-                    saida.append(self._emitir_evento(regra, estado, "ENDED", timestamp_ms, session_id, contexto))
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            estado,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            contexto,
+                        )
+                    )
+
                 self._condicoes.pop(estado_key, None)
+
         return saida
 
     def _encerrar_condicoes_de_entidades_ausentes(
@@ -951,65 +1667,158 @@ class MotorGerenciamentoEstadoConcorrente:
         session_id: str,
         saida: list[dict[str, Any]],
     ) -> None:
-        presentes = {e["entity_id"] for e in entidades}
+        presentes = {
+            e["entity_id"]
+            for e in entidades
+        }
+
         for chave, estado in list(self._condicoes.items()):
             if chave[0] != session_id or estado.get("event_id") is None:
                 continue
-            # Chaves de condição: (session_id, rule_id, entity_id, ...). Estados de
-            # ocupação e transição não apontam para entity_id e não entram aqui.
+
             entity_id = chave[2] if len(chave) >= 3 else None
-            if entity_id in presentes or not isinstance(entity_id, str) or not entity_id.startswith("e-"):
+
+            if (
+                entity_id in presentes
+                or not isinstance(entity_id, str)
+                or not entity_id.startswith("e-")
+            ):
                 continue
-            regra = next((r for r in self.regras if r["rule_id"] == chave[1]), None)
+
+            regra = next(
+                (
+                    r
+                    for r in self.regras
+                    if r["rule_id"] == chave[1]
+                ),
+                None,
+            )
+
             if regra is None:
                 continue
-            # Uma condição só termina quando a entidade ultrapassa o TTL sem
-            # observações; debounce não representa janela de retenção de identidade.
-            if timestamp_ms - int(estado.get("last_seen_ms", timestamp_ms)) <= self.ttl_threshold_ms:
+
+            if (
+                timestamp_ms
+                - int(estado.get("last_seen_ms", timestamp_ms))
+                <= self.ttl_threshold_ms
+            ):
                 continue
-            contexto = dict(estado.get("contexto", {}))
-            saida.append(self._emitir_evento(regra, estado, "ENDED", timestamp_ms, session_id, contexto))
+
+            contexto = dict(
+                estado.get("contexto", {})
+            )
+
+            saida.append(
+                self._emitir_evento(
+                    regra,
+                    estado,
+                    "ENDED",
+                    timestamp_ms,
+                    session_id,
+                    contexto,
+                )
+            )
             self._condicoes.pop(chave, None)
 
-    def _expirar_rastros(self, session_id: str, timestamp_ms: int) -> None:
+    def _expirar_rastros(
+        self,
+        session_id: str,
+        timestamp_ms: int,
+    ) -> None:
         """Remove rastros sem observação por mais que o TTL configurado.
 
-        A expiração é baseada em captured_at, não no relógio da máquina, para
-        manter o comportamento reproduzível em replay e testes.
+        A expiração é baseada em captured_at, não no relógio da máquina,
+        para manter o comportamento reproduzível em replay e testes.
         """
         expirados = [
-            chave for chave, ultimo in self._ultima_observacao_rastro.items()
-            if chave[0] == session_id and timestamp_ms - ultimo > self.ttl_threshold_ms
+            chave
+            for chave, ultimo in self._ultima_observacao_rastro.items()
+            if (
+                chave[0] == session_id
+                and timestamp_ms - ultimo > self.ttl_threshold_ms
+            )
         ]
+
         for chave in expirados:
             self._ultima_observacao_rastro.pop(chave, None)
             self._track_to_entity.pop(chave, None)
             self._ppe_por_rastro.pop(chave, None)
-            chave_memoria = f"{chave[0]}:{chave[1]}:{chave[2]}"
+
+            chave_memoria = (
+                f"{chave[0]}:{chave[1]}:{chave[2]}"
+            )
             self.estado_em_memoria.pop(chave_memoria, None)
+
         expiradas_entidades = [
-            entity_id for entity_id, estado in self._estado_entidades.items()
-            if estado.get("session_id") == session_id
-            and timestamp_ms - int(estado["last_seen_ms"]) > self.ttl_threshold_ms
+            entity_id
+            for entity_id, estado in self._estado_entidades.items()
+            if (
+                estado.get("session_id") == session_id
+                and timestamp_ms - int(estado["last_seen_ms"])
+                > self.ttl_threshold_ms
+            )
         ]
+
         for entity_id in expiradas_entidades:
             self._estado_entidades.pop(entity_id, None)
 
-    def _resetar_estado_sessao(self, session_id: str) -> None:
-        ids_sessao = {v for k, v in self._track_to_entity.items() if k[0] == session_id}
+    def _resetar_estado_sessao(
+        self,
+        session_id: str,
+    ) -> None:
         self._estado_entidades = {
-            k: v for k, v in self._estado_entidades.items() if v.get("session_id") != session_id
+            k: v
+            for k, v in self._estado_entidades.items()
+            if v.get("session_id") != session_id
         }
+
         self.estado_em_memoria = {
-            chave: valor for chave, valor in self.estado_em_memoria.items()
+            chave: valor
+            for chave, valor in self.estado_em_memoria.items()
             if not chave.startswith(f"{session_id}:")
         }
-        self._track_to_entity = {k: v for k, v in self._track_to_entity.items() if k[0] != session_id}
-        self._ppe_por_rastro = {k: v for k, v in self._ppe_por_rastro.items() if k[0] != session_id}
-        self._ultima_observacao_rastro = {k: v for k, v in self._ultima_observacao_rastro.items() if k[0] != session_id}
-        self._condicoes = {k: v for k, v in self._condicoes.items() if k[0] != session_id}
-        self._contagem_zonas = {k: v for k, v in self._contagem_zonas.items() if k[0] != session_id}
-        self._inicio_zona = {k: v for k, v in self._inicio_zona.items() if k[0] != session_id}
-        self._posicao_base = {k: v for k, v in self._posicao_base.items() if k[0] != session_id}
+
+        self._track_to_entity = {
+            k: v
+            for k, v in self._track_to_entity.items()
+            if k[0] != session_id
+        }
+
+        self._ppe_por_rastro = {
+            k: v
+            for k, v in self._ppe_por_rastro.items()
+            if k[0] != session_id
+        }
+
+        self._ultima_observacao_rastro = {
+            k: v
+            for k, v in self._ultima_observacao_rastro.items()
+            if k[0] != session_id
+        }
+
+        self._condicoes = {
+            k: v
+            for k, v in self._condicoes.items()
+            if k[0] != session_id
+        }
+
+        self._contagem_zonas = {
+            k: v
+            for k, v in self._contagem_zonas.items()
+            if k[0] != session_id
+        }
+
+        self._inicio_zona = {
+            k: v
+            for k, v in self._inicio_zona.items()
+            if k[0] != session_id
+        }
+
+        self._posicao_base = {
+            k: v
+            for k, v in self._posicao_base.items()
+            if k[0] != session_id
+        }
+
         self._sequence_por_sessao[session_id] = 0
         self.filtro_temporal.limpar_sessao(session_id)
