@@ -147,9 +147,18 @@ class TestMotorS2(unittest.TestCase):
             entrada.extend(frame_messages(frame, ts, sources=("cam0",)))
             entrada.append(envelope(
                 "ods.i9.ppe_compliance", "cam0", frame, ts,
-                {"frame_index": frame, "detection_id": 0, "items": [
-                    {"equipment_item": "luva", "compliance": "ABSENT", "confidence": 0.7}
-                ]}, "I9",
+                {
+                    "frame_index": frame,
+                    "detection_id": 0,
+                    "uncertain": False,
+                    "items": [
+                        {
+                            "equipment_item": "luva",
+                            "compliance": "ABSENT",
+                            "confidence": 0.7
+                        }
+                    ]
+                }, "I9",
             ))
         saida = motor.processar_mensagens(entrada)
         eventos = [m["payload"] for m in saida if m["schema"] == "ods.s2.event"]
