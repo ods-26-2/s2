@@ -1,0 +1,297 @@
+[
+  {
+    "message_id": "f93d61aa-fe68-4453-8e3f-15703f0b1f47",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 1,
+    "captured_at": "2026-11-13T15:00:00Z",
+    "published_at": "2026-11-13T15:00:00Z",
+    "source_id": "cam_frontal",
+    "producer": "I2",
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 100,
+      "tracks": [
+        {
+          "track_id": "1",
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "detection_id": 0,
+          "point_px": [
+            320,
+            240
+          ],
+          "bbox": [
+            280,
+            180,
+            360,
+            300
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "c4366f5c-1413-48ac-869e-dcd73720af4d",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 2,
+    "captured_at": "2026-11-13T15:00:00Z",
+    "published_at": "2026-11-13T15:00:00Z",
+    "source_id": "cam_frontal",
+    "producer": "I9",
+    "message_type": "event",
+    "schema": "ods.i9.ppe_compliance",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 100,
+      "detection_id": 0,
+      "uncertain": false,
+      "items": [
+        {
+          "equipment_item": "luva",
+          "compliance": "ABSENT",
+          "confidence": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "ebdd9989-9b6f-42a0-a2fe-6f0933d445b8",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 3,
+    "captured_at": "2026-11-13T15:00:03Z",
+    "published_at": "2026-11-13T15:00:03Z",
+    "source_id": "cam_frontal",
+    "producer": "I2",
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 101,
+      "tracks": [
+        {
+          "track_id": "1",
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "detection_id": 0,
+          "point_px": [
+            320,
+            240
+          ],
+          "bbox": [
+            280,
+            180,
+            360,
+            300
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "2c5347cc-a552-4578-aae2-ead4026a364a",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 4,
+    "captured_at": "2026-11-13T15:00:03Z",
+    "published_at": "2026-11-13T15:00:03Z",
+    "source_id": "cam_frontal",
+    "producer": "I9",
+    "message_type": "event",
+    "schema": "ods.i9.ppe_compliance",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 101,
+      "detection_id": 0,
+      "uncertain": false,
+      "items": [
+        {
+          "equipment_item": "luva",
+          "compliance": "ABSENT",
+          "confidence": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "33cf4062-1bb6-47b7-afa3-40ce158fe18e",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 5,
+    "captured_at": "2026-11-13T15:00:06Z",
+    "published_at": "2026-11-13T15:00:06Z",
+    "source_id": "cam_frontal",
+    "producer": "I2",
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 102,
+      "tracks": [
+        {
+          "track_id": "1",
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "detection_id": 0,
+          "point_px": [
+            320,
+            240
+          ],
+          "bbox": [
+            280,
+            180,
+            360,
+            300
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "072dc8a9-deef-4608-8a59-a663e0a726e8",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 6,
+    "captured_at": "2026-11-13T15:00:06Z",
+    "published_at": "2026-11-13T15:00:06Z",
+    "source_id": "cam_frontal",
+    "producer": "I9",
+    "message_type": "event",
+    "schema": "ods.i9.ppe_compliance",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 102,
+      "detection_id": 0,
+      "uncertain": false,
+      "items": [
+        {
+          "equipment_item": "luva",
+          "compliance": "ABSENT",
+          "confidence": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "40fcb942-2c6d-4b83-992b-3cc9eb022eba",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 7,
+    "captured_at": "2026-11-13T15:00:08Z",
+    "published_at": "2026-11-13T15:00:08Z",
+    "source_id": "cam_frontal",
+    "producer": "I2",
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 103,
+      "tracks": [
+        {
+          "track_id": "1",
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "detection_id": 0,
+          "point_px": [
+            320,
+            240
+          ],
+          "bbox": [
+            280,
+            180,
+            360,
+            300
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "77472188-70c8-4886-9b70-7106a7191da6",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 8,
+    "captured_at": "2026-11-13T15:00:08Z",
+    "published_at": "2026-11-13T15:00:08Z",
+    "source_id": "cam_frontal",
+    "producer": "I9",
+    "message_type": "event",
+    "schema": "ods.i9.ppe_compliance",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 103,
+      "detection_id": 0,
+      "uncertain": false,
+      "items": [
+        {
+          "equipment_item": "luva",
+          "compliance": "ABSENT",
+          "confidence": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "c1af6448-3433-4c81-9ed3-d66ed931c03e",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 9,
+    "captured_at": "2026-11-13T15:00:09Z",
+    "published_at": "2026-11-13T15:00:09Z",
+    "source_id": "cam_frontal",
+    "producer": "I2",
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 104,
+      "tracks": [
+        {
+          "track_id": "1",
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "detection_id": 0,
+          "point_px": [
+            320,
+            240
+          ],
+          "bbox": [
+            280,
+            180,
+            360,
+            300
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "message_id": "5cc7f14c-c549-4347-bb04-b23826f31ce6",
+    "session_id": "1567cb27-3c90-47d7-886d-6ee407df742c",
+    "sequence": 10,
+    "captured_at": "2026-11-13T15:00:09Z",
+    "published_at": "2026-11-13T15:00:09Z",
+    "source_id": "cam_frontal",
+    "producer": "I9",
+    "message_type": "event",
+    "schema": "ods.i9.ppe_compliance",
+    "schema_version": "1.0.0",
+    "payload": {
+      "frame_index": 104,
+      "detection_id": 0,
+      "uncertain": false,
+      "items": [
+        {
+          "equipment_item": "luva",
+          "compliance": "CORRECT",
+          "confidence": 0.65
+        }
+      ]
+    }
+  }
+]

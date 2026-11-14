@@ -27,6 +27,26 @@
       "uncertain_below": 0.8,
       "min_duration_ms": 0,
       "debounce_ms": 1000
+    },
+    {
+      "rule_id": "demo-zone-enter",
+      "event_type": "ZONE_ENTER",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "min_confidence": 0.5,
+      "uncertain_below": 0.8,
+      "min_duration_ms": 0,
+      "debounce_ms": 0
+    },
+    {
+      "rule_id": "demo-zone-exit",
+      "event_type": "ZONE_EXIT",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "min_confidence": 0.5,
+      "uncertain_below": 0.8,
+      "min_duration_ms": 0,
+      "debounce_ms": 0
     }
   ]
 }

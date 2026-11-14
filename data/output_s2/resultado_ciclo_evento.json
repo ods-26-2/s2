@@ -1,0 +1,294 @@
+[
+  {
+    "message_type": "event",
+    "message_id": "06d86918-f5b8-4e3f-a742-4fed83a36421",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.968Z",
+    "captured_at": "2026-11-11T15:00:00.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 0,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [
+            "zona-demo"
+          ],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "position_m": [
+            10.0,
+            10.0
+          ],
+          "space_id": "ambiente_teste"
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440001"
+  },
+  {
+    "message_type": "event",
+    "message_id": "605d43b8-396a-4241-bcba-8605910b7646",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:03.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 1,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [
+            "zona-demo"
+          ],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "position_m": [
+            10.0,
+            10.0
+          ],
+          "space_id": "ambiente_teste"
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440003"
+  },
+  {
+    "message_type": "event",
+    "message_id": "62feb849-8ff6-4781-ac35-4c7805e5a778",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:06.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 2,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [
+            "zona-demo"
+          ],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "position_m": [
+            10.0,
+            10.0
+          ],
+          "space_id": "ambiente_teste"
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440005"
+  },
+  {
+    "message_type": "event",
+    "message_id": "3c30d49d-5c81-4e06-9602-275cdd56b0e4",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:06.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 3,
+    "payload": {
+      "event_id": "63fd7c0e-5e54-497c-a709-483cefa5d581",
+      "event_type": "DWELL_EXCEEDED",
+      "rule_id": "demo-dwell-zone",
+      "status": "CONFIRMED",
+      "phase": "STARTED",
+      "confidence": 0.95,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:06.000Z",
+      "duration_ms": 0,
+      "source_ids": [
+        "cam_frontal"
+      ],
+      "details": {
+        "dwell_s": 6
+      }
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440005"
+  },
+  {
+    "message_type": "event",
+    "message_id": "49acdb12-cc1c-4038-bc15-9a9925b166ad",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:08.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 4,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [
+            "zona-demo"
+          ],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "position_m": [
+            10.0,
+            10.0
+          ],
+          "space_id": "ambiente_teste"
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440007"
+  },
+  {
+    "message_type": "event",
+    "message_id": "bbb1186f-e89a-433a-b2f8-7ea6d894f1bd",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:08.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 5,
+    "payload": {
+      "event_id": "63fd7c0e-5e54-497c-a709-483cefa5d581",
+      "event_type": "DWELL_EXCEEDED",
+      "rule_id": "demo-dwell-zone",
+      "status": "CONFIRMED",
+      "phase": "UPDATED",
+      "confidence": 0.95,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:06.000Z",
+      "duration_ms": 2000,
+      "source_ids": [
+        "cam_frontal"
+      ],
+      "details": {
+        "dwell_s": 8
+      }
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440007"
+  },
+  {
+    "message_type": "event",
+    "message_id": "0e5413fb-b1da-47cb-9f85-0521061b5279",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:09.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 6,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "position_m": [
+            10.0,
+            10.0
+          ],
+          "space_id": "ambiente_teste"
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440009"
+  },
+  {
+    "message_type": "event",
+    "message_id": "fa0d0801-23b2-4ded-9f01-b334cacc9b41",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:34:59.969Z",
+    "captured_at": "2026-11-11T15:00:09.000Z",
+    "session_id": "950e8400-e29b-41d4-a716-446655440099",
+    "sequence": 7,
+    "payload": {
+      "event_id": "63fd7c0e-5e54-497c-a709-483cefa5d581",
+      "event_type": "DWELL_EXCEEDED",
+      "rule_id": "demo-dwell-zone",
+      "status": "CONFIRMED",
+      "phase": "ENDED",
+      "confidence": 0.95,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:06.000Z",
+      "duration_ms": 3000,
+      "source_ids": [
+        "cam_frontal"
+      ],
+      "details": {
+        "dwell_s": 0
+      }
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "950e8400-e29b-41d4-a716-446655440009"
+  }
+]

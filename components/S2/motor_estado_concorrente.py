@@ -303,10 +303,23 @@ class MotorGerenciamentoEstadoConcorrente:
                         f"rules[{indice}].{campo} deve ser integer >= 0"
                     )
 
-            if "threshold" in regra and not _numero_finito(regra["threshold"]):
+            tipos_com_threshold = {
+                "DWELL_EXCEEDED",
+                "OCCUPANCY_ABOVE",
+                "OCCUPANCY_BELOW",
+                "OBJECT_STATIONARY",
+            }
+            if event_type in tipos_com_threshold and "threshold" not in regra:
                 raise ValueError(
-                    f"rules[{indice}].threshold deve ser number finito"
+                    f"rules[{indice}].threshold é obrigatório para {event_type}"
                 )
+
+            if "threshold" in regra:
+                threshold = regra["threshold"]
+                if not _numero_finito(threshold) or float(threshold) < 0:
+                    raise ValueError(
+                        f"rules[{indice}].threshold deve ser number finito >= 0"
+                    )
 
             for campo in ("class", "zone_id", "equipment_item"):
                 if campo in regra and regra[campo] is not None:
@@ -1266,8 +1279,17 @@ class MotorGerenciamentoEstadoConcorrente:
             if obs.get("position_m") is not None and obs.get("space_id"):
                 for cluster in clusters:
                     # Uma fonte não pode aparecer duas vezes no mesmo cluster.
+                    # Uma fonte não pode aparecer duas vezes no mesmo cluster.
                     if any(
                         item["source_id"] == obs["source_id"]
+                        for item in cluster
+                    ):
+                        continue
+
+                    # Não associar objetos de classes distintas, mesmo que
+                    # estejam próximos no mesmo espaço e instante.
+                    if any(
+                        item.get("class") != obs.get("class")
                         for item in cluster
                     ):
                         continue
@@ -2053,13 +2075,19 @@ class MotorGerenciamentoEstadoConcorrente:
                 "zone_id e transition ENTER/EXIT válidos"
             )
 
-        if transicao == "ENTER":
-            entered_at = payload.get("entered_at")
-            if entered_at is None:
-                raise ValueError(
-                    "ods.s1.zone_transition ENTER exige entered_at"
-                )
-            FiltroRuidoTemporal.timestamp_em_ms(entered_at)
+        # entered_at é obrigatório tanto em ENTER quanto em EXIT no
+        # contrato 6c. Em ENTER, deve representar o próprio captured_at.
+        entered_at = payload.get("entered_at")
+        if entered_at is None:
+            raise ValueError(
+                "ods.s1.zone_transition exige payload.entered_at"
+            )
+        entered_at_ms = FiltroRuidoTemporal.timestamp_em_ms(entered_at)
+
+        if transicao == "ENTER" and entered_at_ms != timestamp_ms:
+            raise ValueError(
+                "Em transition=ENTER, entered_at deve ser igual a captured_at"
+            )
 
         if transicao == "EXIT":
             dwell_s = payload.get("dwell_s")

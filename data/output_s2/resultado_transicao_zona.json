@@ -1,0 +1,158 @@
+[
+  {
+    "message_type": "event",
+    "message_id": "a76b53d2-a879-44d0-8cc9-6ce49a18bb75",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-13T13:29:22.273Z",
+    "captured_at": "2026-11-11T15:00:00.000Z",
+    "session_id": "a50e8400-e29b-41d4-a716-446655440099",
+    "sequence": 0,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "point_px": [
+            505,
+            702
+          ]
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "a50e8400-e29b-41d4-a716-446655440001"
+  },
+  {
+    "message_type": "event",
+    "message_id": "f61a9b07-dbad-470e-af9e-575a69ef8fce",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-13T13:29:22.273Z",
+    "captured_at": "2026-11-11T15:00:00.000Z",
+    "session_id": "a50e8400-e29b-41d4-a716-446655440099",
+    "sequence": 1,
+    "payload": {
+      "event_id": "19dc2600-7947-4242-9ff6-01e726a41b73",
+      "event_type": "ZONE_ENTER",
+      "rule_id": "demo-zone-enter",
+      "status": "CONFIRMED",
+      "phase": "STARTED",
+      "confidence": 1.0,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:00.000Z",
+      "duration_ms": 0,
+      "source_ids": [
+        "cam_frontal"
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "a50e8400-e29b-41d4-a716-446655440002"
+  },
+  {
+    "message_type": "event",
+    "message_id": "6796c288-ece4-42d3-8fbe-8611e412e738",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-13T13:29:22.273Z",
+    "captured_at": "2026-11-11T15:00:10.000Z",
+    "session_id": "a50e8400-e29b-41d4-a716-446655440099",
+    "sequence": 2,
+    "payload": {
+      "event_id": "19dc2600-7947-4242-9ff6-01e726a41b73",
+      "event_type": "ZONE_ENTER",
+      "rule_id": "demo-zone-enter",
+      "status": "CONFIRMED",
+      "phase": "ENDED",
+      "confidence": 1.0,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:00.000Z",
+      "duration_ms": 10000,
+      "source_ids": [
+        "cam_frontal"
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "a50e8400-e29b-41d4-a716-446655440003"
+  },
+  {
+    "message_type": "event",
+    "message_id": "1634150f-a149-4494-9723-87476e1caa7e",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-13T13:29:22.273Z",
+    "captured_at": "2026-11-11T15:00:10.000Z",
+    "session_id": "a50e8400-e29b-41d4-a716-446655440099",
+    "sequence": 3,
+    "payload": {
+      "event_id": "81d8dab1-2448-4f17-8c47-80def007f8d4",
+      "event_type": "ZONE_EXIT",
+      "rule_id": "demo-zone-exit",
+      "status": "CONFIRMED",
+      "phase": "STARTED",
+      "confidence": 1.0,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:10.000Z",
+      "duration_ms": 0,
+      "source_ids": [
+        "cam_frontal"
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "a50e8400-e29b-41d4-a716-446655440003"
+  },
+  {
+    "message_type": "event",
+    "message_id": "136db07d-e99e-4853-8991-94c3dd3ad480",
+    "schema": "ods.s2.event",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-13T13:29:22.273Z",
+    "captured_at": "2026-11-11T15:00:10.000Z",
+    "session_id": "a50e8400-e29b-41d4-a716-446655440099",
+    "sequence": 4,
+    "payload": {
+      "event_id": "81d8dab1-2448-4f17-8c47-80def007f8d4",
+      "event_type": "ZONE_EXIT",
+      "rule_id": "demo-zone-exit",
+      "status": "CONFIRMED",
+      "phase": "ENDED",
+      "confidence": 1.0,
+      "entity_id": "e-000001",
+      "class": "person",
+      "zone_id": "zona-demo",
+      "started_at": "2026-11-11T15:00:10.000Z",
+      "duration_ms": 0,
+      "source_ids": [
+        "cam_frontal"
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "rules-s2-demo-1.0.0",
+    "correlation_id": "a50e8400-e29b-41d4-a716-446655440003"
+  }
+]

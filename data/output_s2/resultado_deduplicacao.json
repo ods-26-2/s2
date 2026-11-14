@@ -1,0 +1,39 @@
+[
+  {
+    "message_type": "event",
+    "message_id": "0b2c137c-10c9-4142-bcc2-fb5e84f224e1",
+    "schema": "ods.s2.entity",
+    "schema_version": "1.0",
+    "producer": "S2",
+    "published_at": "2026-11-11T17:05:46.968Z",
+    "captured_at": "2026-11-11T15:00:00.000Z",
+    "session_id": "850e8400-e29b-41d4-a716-446655440099",
+    "sequence": 0,
+    "payload": {
+      "entities": [
+        {
+          "entity_id": "e-000001",
+          "class": "person",
+          "zone_ids": [],
+          "source_ids": [
+            "cam_frontal"
+          ],
+          "track_refs": [
+            {
+              "source_id": "cam_frontal",
+              "track_id": "1"
+            }
+          ],
+          "position_m": [
+            10.0,
+            10.0
+          ],
+          "space_id": "ambiente_teste"
+        }
+      ]
+    },
+    "source_id": "cam_frontal",
+    "artifact_version": "s2-fusion-1",
+    "correlation_id": "850e8400-e29b-41d4-a716-446655440001"
+  }
+]

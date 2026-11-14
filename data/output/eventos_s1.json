@@ -1,4 +1,33 @@
+
 [
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "550e8400-e29b-41d4-a716-446655440101",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 1,
+    "captured_at": "2026-11-03T18:00:00.000Z",
+    "published_at": "2026-11-03T18:00:00.000Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 48213,
+      "tracks": [
+        {
+          "track_id": "1",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.90,
+          "point_px": [505, 702],
+          "bbox": [412, 180, 598, 702]
+        }
+      ]
+    }
+  },
   {
     "message_type": "event",
     "schema": "ods.s1.position",
@@ -15,14 +44,39 @@
       "frame_index": 48213,
       "positions": [
         {
-          "track_id": 1,
+          "track_id": "1",
           "class": "person",
-          "position_m": {
-            "x": 50.9,
-            "y": 25.0
-          },
+          "position_m": [50.9, 25.0],
           "space_id": "demo-space-frontal",
           "zone_ids": []
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "550e8400-e29b-41d4-a716-446655440102",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 2,
+    "captured_at": "2026-11-03T18:00:00.100Z",
+    "published_at": "2026-11-03T18:00:00.100Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 48214,
+      "tracks": [
+        {
+          "track_id": "1",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.92,
+          "point_px": [507, 702],
+          "bbox": [414, 180, 600, 702]
         }
       ]
     }
@@ -43,14 +97,39 @@
       "frame_index": 48214,
       "positions": [
         {
-          "track_id": 1,
+          "track_id": "1",
           "class": "person",
-          "position_m": {
-            "x": 51.1,
-            "y": 25.0
-          },
+          "position_m": [51.1, 25.0],
           "space_id": "demo-space-frontal",
           "zone_ids": []
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "550e8400-e29b-41d4-a716-446655440103",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 3,
+    "captured_at": "2026-11-03T18:00:00.200Z",
+    "published_at": "2026-11-03T18:00:00.200Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 48215,
+      "tracks": [
+        {
+          "track_id": "1",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.91,
+          "point_px": [504, 702],
+          "bbox": [411, 180, 597, 702]
         }
       ]
     }
@@ -71,14 +150,39 @@
       "frame_index": 48215,
       "positions": [
         {
-          "track_id": 1,
+          "track_id": "1",
           "class": "person",
-          "position_m": {
-            "x": 50.8,
-            "y": 25.0
-          },
+          "position_m": [50.8, 25.0],
           "space_id": "demo-space-frontal",
           "zone_ids": []
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "550e8400-e29b-41d4-a716-446655440104",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 4,
+    "captured_at": "2026-11-03T18:00:00.300Z",
+    "published_at": "2026-11-03T18:00:00.300Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 48216,
+      "tracks": [
+        {
+          "track_id": "99",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.93,
+          "point_px": [150, 300],
+          "bbox": [100, 100, 200, 300]
         }
       ]
     }
@@ -99,14 +203,39 @@
       "frame_index": 48216,
       "positions": [
         {
-          "track_id": 99,
+          "track_id": "99",
           "class": "person",
-          "position_m": {
-            "x": 10.0,
-            "y": 10.0
-          },
+          "position_m": [10.0, 10.0],
           "space_id": "demo-space-frontal",
           "zone_ids": []
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "550e8400-e29b-41d4-a716-446655440105",
+    "session_id": "550e8400-e29b-41d4-a716-446655440099",
+    "sequence": 5,
+    "captured_at": "2026-11-03T18:00:00.400Z",
+    "published_at": "2026-11-03T18:00:00.400Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 48217,
+      "tracks": [
+        {
+          "track_id": "99",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.94,
+          "point_px": [155, 300],
+          "bbox": [105, 100, 205, 300]
         }
       ]
     }
@@ -127,16 +256,11 @@
       "frame_index": 48217,
       "positions": [
         {
-          "track_id": 99,
+          "track_id": "99",
           "class": "person",
-          "position_m": {
-            "x": 15.0,
-            "y": 10.0
-          },
+          "position_m": [15.0, 10.0],
           "space_id": "demo-space-frontal",
-          "zone_ids": [
-            "zona_segura_01"
-          ]
+          "zone_ids": ["zona_segura_01"]
         }
       ]
     }
@@ -154,7 +278,7 @@
     "source_id": "cam_frontal",
     "artifact_version": "zones-demo-1",
     "payload": {
-      "track_id": 99,
+      "track_id": "99",
       "class": "person",
       "zone_id": "zona_segura_01",
       "transition": "ENTER",
