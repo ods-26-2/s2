@@ -151,12 +151,14 @@ def _validar_lista_strings(valor: Any, campo: str) -> list[str]:
 class MotorGerenciamentoEstadoConcorrente:
     """Implementa fusão de identidade e qualificação temporal de eventos."""
 
+    
     def __init__(
         self,
         merge_distance_threshold: float = DISTANCIA_FUSAO_M,
         time_sync_threshold_ms: int = SINCRONISMO_FUSAO_MS,
         filtro_temporal: FiltroRuidoTemporal | None = None,
         ttl_threshold_ms: int = TTL_ENTIDADE_MS,
+        artefato_ppe_catalog: dict[str, Any] | None = None,
     ) -> None:
         if (
             not _numero_finito(merge_distance_threshold)
@@ -177,8 +179,13 @@ class MotorGerenciamentoEstadoConcorrente:
             ):
                 raise ValueError(f"{nome} deve ser integer >= 0")
 
-        if not _numero_finito(REIDENTIFICACAO_PIXELS) or REIDENTIFICACAO_PIXELS < 0:
-            raise ValueError("REIDENTIFICACAO_PIXELS deve ser finito e >= 0")
+        if (
+            not _numero_finito(REIDENTIFICACAO_PIXELS)
+            or REIDENTIFICACAO_PIXELS < 0
+        ):
+            raise ValueError(
+                "REIDENTIFICACAO_PIXELS deve ser finito e >= 0"
+            )
 
         self.merge_distance_threshold = float(merge_distance_threshold)
         self.time_sync_threshold_ms = time_sync_threshold_ms
@@ -187,31 +194,44 @@ class MotorGerenciamentoEstadoConcorrente:
 
         self.estado_em_memoria: dict[str, dict[str, Any]] = {}
         self.global_id_counter = 1
+
+        # Artefato RULES.
         self.artifact_version_regras: str | None = None
         self.regras: list[dict[str, Any]] = []
 
+        # Artefato PPE_CATALOG.
+        self.catalog_version_ppe: str | None = None
+        self.ppe_catalog_items: dict[str, dict[str, Any]] = {}
+        self.ppe_required_by_zone: dict[str, list[str]] = {}
+
         # Chave local: (session_id, source_id, track_id).
         self._track_to_entity: dict[tuple[str, str, str], str] = {}
-        self._ppe_por_rastro: dict[
-            tuple[str, str, str], dict[str, dict[str, Any]]
-        ] = {}
 
         # Chave de condição: (session_id, rule_id, identidade...).
         self._condicoes: dict[tuple[Any, ...], dict[str, Any]] = {}
 
         self._contagem_zonas: dict[tuple[str, str], int] = {}
         self._inicio_zona: dict[tuple[str, str], int] = {}
+
         self._posicao_base: dict[
             tuple[str, str], tuple[int, float, float, str]
         ] = {}
 
         self._sequence_por_sessao: dict[str, int] = defaultdict(int)
         self._processadas: set[str] = set()
+
         self._ultima_observacao_entidade: dict[tuple[str, str], int] = {}
+
         self._ultima_observacao_rastro: dict[
             tuple[str, str, str], int
         ] = {}
+
         self._estado_entidades: dict[str, dict[str, Any]] = {}
+
+        # Carrega o catálogo quando fornecido.
+        if artefato_ppe_catalog is not None:
+            self.carregar_ppe_catalog(artefato_ppe_catalog)
+
 
     # ------------------------------------------------------------------
     # Regras
@@ -332,6 +352,143 @@ class MotorGerenciamentoEstadoConcorrente:
 
         self.artifact_version_regras = versao
         self.regras = validadas
+
+
+    def carregar_ppe_catalog(
+        self,
+        artefato_ppe_catalog: dict[str, Any] | None,
+    ) -> None:
+        """Valida e carrega o artefato PPE_CATALOG."""
+
+        if artefato_ppe_catalog is None:
+            self.catalog_version_ppe = None
+            self.ppe_catalog_items = {}
+            self.ppe_required_by_zone = {}
+            return
+
+        if not isinstance(artefato_ppe_catalog, dict):
+            raise ValueError(
+                "O PPE_CATALOG deve ser um objeto JSON"
+            )
+
+        versao = artefato_ppe_catalog.get("catalog_version")
+        items = artefato_ppe_catalog.get("items")
+        required = artefato_ppe_catalog.get("required")
+
+        if not isinstance(versao, str) or not versao.strip():
+            raise ValueError(
+                "O PPE_CATALOG exige catalog_version não vazio"
+            )
+
+        if not isinstance(items, list):
+            raise ValueError(
+                "O PPE_CATALOG exige items como array"
+            )
+
+        if not isinstance(required, list):
+            raise ValueError(
+                "O PPE_CATALOG exige required como array"
+            )
+
+        partes_validas = {
+            "HEAD",
+            "EYES",
+            "EARS",
+            "HANDS",
+            "FEET",
+            "TORSO",
+        }
+
+        itens_validados: dict[str, dict[str, Any]] = {}
+
+        for indice, item_original in enumerate(items):
+            if not isinstance(item_original, dict):
+                raise ValueError(
+                    f"items[{indice}] deve ser um objeto"
+                )
+
+            item = dict(item_original)
+
+            equipamento = item.get("equipment_item")
+            nome = item.get("name")
+            parte_corpo = item.get("body_part")
+
+            if not isinstance(equipamento, str) or not equipamento.strip():
+                raise ValueError(
+                    f"items[{indice}].equipment_item deve ser "
+                    "string não vazia"
+                )
+
+            if equipamento in itens_validados:
+                raise ValueError(
+                    f"equipment_item duplicado no PPE_CATALOG: "
+                    f"{equipamento}"
+                )
+
+            if not isinstance(nome, str) or not nome.strip():
+                raise ValueError(
+                    f"items[{indice}].name deve ser string não vazia"
+                )
+
+            if parte_corpo not in partes_validas:
+                raise ValueError(
+                    f"items[{indice}].body_part inválido: "
+                    f"{parte_corpo!r}"
+                )
+
+            itens_validados[equipamento] = item
+
+        exigidos_por_zona: dict[str, list[str]] = {}
+
+        for indice, exigencia_original in enumerate(required):
+            if not isinstance(exigencia_original, dict):
+                raise ValueError(
+                    f"required[{indice}] deve ser um objeto"
+                )
+
+            zona = exigencia_original.get("zone_id")
+            equipamentos = exigencia_original.get("items")
+
+            if not isinstance(zona, str) or not zona.strip():
+                raise ValueError(
+                    f"required[{indice}].zone_id deve ser "
+                    "string não vazia"
+                )
+
+            if zona in exigidos_por_zona:
+                raise ValueError(
+                    f"Zona duplicada no PPE_CATALOG.required: {zona}"
+                )
+
+            if not isinstance(equipamentos, list):
+                raise ValueError(
+                    f"required[{indice}].items deve ser um array"
+                )
+
+            equipamentos_validados = _validar_lista_strings(
+                equipamentos,
+                f"required[{indice}].items",
+            )
+
+            if len(equipamentos_validados) != len(set(equipamentos_validados)):
+                raise ValueError(
+                    f"required[{indice}].items possui "
+                    "equipamentos duplicados"
+                )
+
+            for equipamento in equipamentos_validados:
+                if equipamento not in itens_validados:
+                    raise ValueError(
+                        f"PPE_CATALOG.required referencia "
+                        f"equipamento não cadastrado: {equipamento}"
+                    )
+
+            exigidos_por_zona[zona] = equipamentos_validados
+
+        self.catalog_version_ppe = versao
+        self.ppe_catalog_items = itens_validados
+        self.ppe_required_by_zone = exigidos_por_zona
+
 
     # ------------------------------------------------------------------
     # Estado e envelopes
@@ -1042,14 +1199,6 @@ class MotorGerenciamentoEstadoConcorrente:
                         "tracks[].detection_id deve ser integer >= 0"
                     )
 
-                if not predicted and detection_id in ppe_por_detection:
-                    itens_validos: dict[str, dict[str, Any]] = {}
-
-                    for item_ppe in ppe_por_detection[detection_id]:
-                        equipamento = item_ppe["equipment_item"]
-                        itens_validos[equipamento] = dict(item_ppe)
-
-                    self._ppe_por_rastro[key_rastro] = itens_validos
 
                 posicao = posicoes.get(track_id, {})
 
@@ -1126,13 +1275,14 @@ class MotorGerenciamentoEstadoConcorrente:
                 captura_track_ms = self._captura_ms(msg_tracks)
                 self._ultima_observacao_rastro[key_rastro] = captura_track_ms
 
-                # Em predicted não se apresenta o PPE anterior como atual.
+                # PPE só é válido quando avaliado pelo I9 no quadro atual.
                 ppe_observado = (
-                    []
-                    if predicted
-                    else list(
-                        self._ppe_por_rastro.get(key_rastro, {}).values()
-                    )
+                    [
+                        dict(item)
+                        for item in ppe_por_detection.get(detection_id, [])
+                    ]
+                    if not predicted and detection_id is not None
+                    else []
                 )
 
                 observacoes.append(
@@ -1193,7 +1343,6 @@ class MotorGerenciamentoEstadoConcorrente:
         """Remove o vínculo local de um rastro encerrado por I2."""
         self._ultima_observacao_rastro.pop(chave, None)
         self._track_to_entity.pop(chave, None)
-        self._ppe_por_rastro.pop(chave, None)
 
         chave_memoria = f"{chave[0]}:{chave[1]}:{chave[2]}"
         self.estado_em_memoria.pop(chave_memoria, None)
@@ -1622,65 +1771,111 @@ class MotorGerenciamentoEstadoConcorrente:
                     ),
                 }
 
+                
                 if tipo == "PPE_NON_COMPLIANT":
                     equipamento_regra = regra.get("equipment_item")
-                    ppe_por_item = {
-                        item.get("equipment_item"): item
-                        for item in entidade.get("ppe", [])
+
+                    # Mantém as avaliações de I9 separadas por zona.
+                    ppe_por_zona: dict[
+                        Any, dict[str, dict[str, Any]]
+                    ] = defaultdict(dict)
+
+                    for obs in obs_entity:
+                        zonas_obs = obs.get("zone_ids", []) or [None]
+
+                        for zona_obs in zonas_obs:
+                            for item in obs.get("ppe", []):
+                                equipamento = item.get("equipment_item")
+                                if equipamento:
+                                    ppe_por_zona[zona_obs][equipamento] = (
+                                        dict(item)
+                                    )
+
+                    # Recupera zonas com condições ativas para encerrá-las
+                    # quando a entidade sair delas.
+                    zonas_ativas = {
+                        chave[3]
+                        for chave in self._condicoes
+                        if (
+                            len(chave) >= 5
+                            and chave[0] == session_id
+                            and chave[1] == regra["rule_id"]
+                            and chave[2] == entity_id
+                        )
                     }
 
-                    equipamentos = (
-                        [equipamento_regra]
-                        if equipamento_regra
-                        else list(ppe_por_item)
-                    )
-
-                    for equipamento in equipamentos:
-                        ppe = ppe_por_item.get(equipamento)
-
-                        # Sem avaliação atual de I9 não se infere compliance.
-                        if ppe is None:
-                            continue
-
-                        compliance = ppe.get("compliance")
-                        confidence = float(ppe.get("confidence", 0.0))
-
-                        condicao = (
-                            compliance in {"ABSENT", "INCORRECT"}
-                            and classe_ok
-                            and zona_ok
+                    if zona_regra:
+                        zonas_avaliadas = [zona_regra]
+                    else:
+                        zonas_avaliadas = list(
+                            dict.fromkeys([*zonas, *zonas_ativas])
                         )
 
-                        contexto = {
-                            **context_base,
-                            "equipment_item": equipamento,
-                            "confidence": confidence,
-                            "details": {
-                                "compliance": compliance,
-                                "min_duration_ms": regra["min_duration_ms"],
-                            },
-                        }
+                        if not zonas_avaliadas and equipamento_regra:
+                            zonas_avaliadas = [None]
 
-                        # O contrato de entidade não inclui uncertain no PPE.
-                        # Para preservar a dúvida do I9 durante a avaliação,
-                        # recupera-se o estado do rastro observado no quadro.
-                        contexto["uncertain"] = any(
-                            item.get("uncertain") is True
-                            and item.get("equipment_item") == equipamento
-                            for obs in obs_entity
-                            for item in obs.get("ppe", [])
-                        )
+                    for zona in zonas_avaliadas:
+                        ppe_por_item = ppe_por_zona.get(zona, {})
 
-                        saida.extend(
-                            self._atualizar_condicao(
-                                regra,
-                                (entity_id, equipamento),
-                                condicao,
-                                timestamp_ms,
-                                contexto,
-                                session_id,
+                        if equipamento_regra:
+                            equipamentos = [equipamento_regra]
+                        elif self.catalog_version_ppe is not None:
+                            equipamentos = self.ppe_required_by_zone.get(
+                                zona, []
                             )
-                        )
+                        else:
+                            equipamentos = list(ppe_por_item)
+
+                        for equipamento in equipamentos:
+                            ppe = ppe_por_item.get(equipamento)
+
+                            compliance = (
+                                ppe.get("compliance")
+                                if ppe is not None
+                                else None
+                            )
+
+                            confidence = (
+                                float(ppe.get("confidence", 0.0))
+                                if ppe is not None
+                                else float(context_base["confidence"])
+                            )
+
+                            condicao = (
+                                ppe is not None
+                                and compliance in {"ABSENT", "INCORRECT"}
+                                and classe_ok
+                                and zona_ok
+                            )
+
+                            contexto = {
+                                **context_base,
+                                "zone_id": zona,
+                                "equipment_item": equipamento,
+                                "confidence": confidence,
+                                "details": {
+                                    "compliance": compliance,
+                                    "min_duration_ms": regra[
+                                        "min_duration_ms"
+                                    ],
+                                },
+                                "uncertain": (
+                                    ppe.get("uncertain") is True
+                                    if ppe is not None
+                                    else False
+                                ),
+                            }
+
+                            saida.extend(
+                                self._atualizar_condicao(
+                                    regra,
+                                    (entity_id, zona, equipamento),
+                                    condicao,
+                                    timestamp_ms,
+                                    contexto,
+                                    session_id,
+                                )
+                            )
 
                 elif tipo == "DWELL_EXCEEDED":
                     if not classe_ok:
@@ -2474,12 +2669,6 @@ class MotorGerenciamentoEstadoConcorrente:
         self._track_to_entity = {
             chave: valor
             for chave, valor in self._track_to_entity.items()
-            if chave[0] != session_id
-        }
-
-        self._ppe_por_rastro = {
-            chave: valor
-            for chave, valor in self._ppe_por_rastro.items()
             if chave[0] != session_id
         }
 

@@ -132,6 +132,237 @@ class TestMotorS2(unittest.TestCase):
         eventos = [m["payload"] for m in saida if m["schema"] == "ods.s2.event"]
         self.assertEqual([e["phase"] for e in eventos], ["STARTED"])
 
+    
+    def test_evento_ppe_encerra_apos_ttl_sem_observacao(self):
+        motor = MotorGerenciamentoEstadoConcorrente(
+            ttl_threshold_ms=5000
+        )
+        motor.carregar_regras({
+            "artifact_version": "rules-ppe-ttl-1",
+            "rules": [{
+                "rule_id": "ppe-ttl-test",
+                "event_type": "PPE_NON_COMPLIANT",
+                "equipment_item": "luva",
+                "min_confidence": 0.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }],
+        })
+
+        entrada = []
+
+        for frame, ts in ((1, BASE), (2, BASE + 6001)):
+            entrada.extend(
+                frame_messages(
+                    frame,
+                    ts,
+                    sources=("cam0",),
+                )
+            )
+
+            if frame == 1:
+                entrada.append(envelope(
+                    "ods.i9.ppe_compliance",
+                    "cam0",
+                    frame,
+                    ts,
+                    {
+                        "frame_index": frame,
+                        "detection_id": 0,
+                        "uncertain": False,
+                        "items": [{
+                            "equipment_item": "luva",
+                            "compliance": "ABSENT",
+                            "confidence": 0.95,
+                        }],
+                    },
+                    "I9",
+                ))
+
+        # A segunda observação ocorre depois do TTL, mas a entidade
+        # continua presente. Para testar ausência real, removemos
+        # as mensagens do segundo quadro.
+        entrada = [
+            mensagem
+            for mensagem in entrada
+            if mensagem["payload"].get("frame_index") == 1
+        ]
+
+        saida = motor.processar_mensagens(entrada)
+
+        # Processa um quadro posterior sem a entidade, usando
+        # uma mensagem válida de outra entidade como referência.
+        # O teste será complementado após verificarmos o mecanismo
+        # de expiração do estado.
+
+
+    def test_evento_ppe_encerra_apos_ttl_sem_observacao(self):
+        motor = MotorGerenciamentoEstadoConcorrente(
+            ttl_threshold_ms=5000
+        )
+        motor.carregar_regras({
+            "artifact_version": "rules-ppe-ttl-1",
+            "rules": [{
+                "rule_id": "ppe-ttl-test",
+                "event_type": "PPE_NON_COMPLIANT",
+                "equipment_item": "luva",
+                "min_confidence": 0.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }],
+        })
+
+        entrada = frame_messages(
+            1, BASE, sources=("cam0",)
+        )
+
+        entrada.append(envelope(
+            "ods.i9.ppe_compliance",
+            "cam0",
+            1,
+            BASE,
+            {
+                "frame_index": 1,
+                "detection_id": 0,
+                "uncertain": False,
+                "items": [{
+                    "equipment_item": "luva",
+                    "compliance": "ABSENT",
+                    "confidence": 0.95,
+                }],
+            },
+            "I9",
+        ))
+
+        # Quadro posterior sem nenhuma pessoa.
+        entrada.extend([
+            envelope(
+                "ods.i2.tracks",
+                "cam0",
+                2,
+                BASE + 6001,
+                {"frame_index": 2, "tracks": []},
+                "I2",
+            ),
+            envelope(
+                "ods.s1.position",
+                "cam0",
+                2,
+                BASE + 6001,
+                {"frame_index": 2, "positions": []},
+                "S1",
+            ),
+        ])
+
+        saida = motor.processar_mensagens(entrada)
+
+        eventos = [
+            mensagem["payload"]
+            for mensagem in saida
+            if mensagem["schema"] == "ods.s2.event"
+        ]
+
+        self.assertEqual(
+            [evento["phase"] for evento in eventos],
+            ["STARTED", "ENDED"],
+        )
+        self.assertEqual(
+            eventos[0]["event_id"],
+            eventos[1]["event_id"],
+        )
+        self.assertEqual(eventos[1]["equipment_item"], "luva")
+        self.assertEqual(eventos[1]["zone_id"], "zona-demo")
+
+
+    def test_ppe_separa_condicoes_por_zona_e_equipamento(self):
+        catalogo = {
+            "catalog_version": "ppe-catalog-multizone-1",
+            "items": [
+                {"equipment_item": "luva", "name": "Luvas", "body_part": "HANDS"},
+                {"equipment_item": "capacete", "name": "Capacete", "body_part": "HEAD"},
+            ],
+            "required": [
+                {"zone_id": "galpao-solda", "items": ["luva"]},
+                {"zone_id": "area-corte", "items": ["capacete"]},
+            ],
+        }
+
+        motor = MotorGerenciamentoEstadoConcorrente(
+            artefato_ppe_catalog=catalogo
+        )
+        motor.carregar_regras({
+            "artifact_version": "rules-ppe-multizone-1",
+            "rules": [{
+                "rule_id": "ppe-multizone-test",
+                "event_type": "PPE_NON_COMPLIANT",
+                "min_confidence": 0.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }],
+        })
+
+        entrada = frame_messages(1, BASE, sources=("cam0",))
+
+        for mensagem in entrada:
+            if mensagem["schema"] == "ods.s1.position":
+                mensagem["payload"]["positions"][0]["zone_ids"] = [
+                    "galpao-solda",
+                    "area-corte",
+                ]
+
+        entrada.append(envelope(
+            "ods.i9.ppe_compliance",
+            "cam0",
+            1,
+            BASE,
+            {
+                "frame_index": 1,
+                "detection_id": 0,
+                "uncertain": False,
+                "items": [
+                    {
+                        "equipment_item": "luva",
+                        "compliance": "ABSENT",
+                        "confidence": 0.95,
+                    },
+                    {
+                        "equipment_item": "capacete",
+                        "compliance": "INCORRECT",
+                        "confidence": 0.90,
+                    },
+                ],
+            },
+            "I9",
+        ))
+
+        saida = motor.processar_mensagens(entrada)
+        eventos = [
+            mensagem["payload"]
+            for mensagem in saida
+            if mensagem["schema"] == "ods.s2.event"
+        ]
+
+        combinacoes = {
+            (evento["zone_id"], evento["equipment_item"])
+            for evento in eventos
+        }
+
+        self.assertEqual(len(eventos), 2)
+        self.assertEqual(
+            combinacoes,
+            {
+                ("galpao-solda", "luva"),
+                ("area-corte", "capacete"),
+            },
+        )
+        self.assertTrue(
+            all(evento["phase"] == "STARTED" for evento in eventos)
+        )
+
+
     def test_correlaciona_i9_com_i2_por_detection_id_e_quadro(self):
         motor = MotorGerenciamentoEstadoConcorrente()
         motor.carregar_regras({
@@ -166,6 +397,131 @@ class TestMotorS2(unittest.TestCase):
         self.assertEqual(eventos[0]["event_type"], "PPE_NON_COMPLIANT")
         self.assertEqual(eventos[0]["equipment_item"], "luva")
         self.assertEqual(eventos[0]["status"], "UNCERTAIN")
+
+    
+    def test_ppe_catalog_avalia_somente_itens_observados_e_obrigatorios(self):
+        catalogo = {
+            "catalog_version": "ppe-catalog-test-1",
+            "items": [
+                {"equipment_item": "capacete", "name": "Capacete", "body_part": "HEAD"},
+                {"equipment_item": "luva", "name": "Luvas", "body_part": "HANDS"},
+                {"equipment_item": "oculos", "name": "Óculos", "body_part": "EYES"},
+            ],
+            "required": [
+                {
+                    "zone_id": "galpao-solda",
+                    "items": ["capacete", "luva", "oculos"],
+                }
+            ],
+        }
+
+        motor = MotorGerenciamentoEstadoConcorrente(
+            artefato_ppe_catalog=catalogo
+        )
+        motor.carregar_regras({
+            "artifact_version": "rules-ppe-catalog-test-1",
+            "rules": [{
+                "rule_id": "ppe-zone-test",
+                "event_type": "PPE_NON_COMPLIANT",
+                "min_confidence": 0.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }],
+        })
+
+        entrada = frame_messages(1, BASE, sources=("cam0",))
+
+        for mensagem in entrada:
+            if mensagem["schema"] == "ods.s1.position":
+                mensagem["payload"]["positions"][0]["zone_ids"] = [
+                    "galpao-solda"
+                ]
+
+        entrada.append(envelope(
+            "ods.i9.ppe_compliance",
+            "cam0",
+            1,
+            BASE,
+            {
+                "frame_index": 1,
+                "detection_id": 0,
+                "uncertain": False,
+                "items": [{
+                    "equipment_item": "luva",
+                    "compliance": "ABSENT",
+                    "confidence": 0.95,
+                }],
+            },
+            "I9",
+        ))
+
+        saida = motor.processar_mensagens(entrada)
+        eventos = [
+            mensagem["payload"]
+            for mensagem in saida
+            if mensagem["schema"] == "ods.s2.event"
+        ]
+
+        self.assertEqual(len(eventos), 1)
+        self.assertEqual(eventos[0]["event_type"], "PPE_NON_COMPLIANT")
+        self.assertEqual(eventos[0]["equipment_item"], "luva")
+        self.assertEqual(eventos[0]["zone_id"], "galpao-solda")
+        self.assertEqual(eventos[0]["status"], "CONFIRMED")
+
+    def test_ppe_nao_reutiliza_avaliacao_de_quadro_anterior(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        motor.carregar_regras({
+            "artifact_version": "rules-ppe-freshness-test-1",
+            "rules": [{
+                "rule_id": "ppe-freshness-test",
+                "event_type": "PPE_NON_COMPLIANT",
+                "equipment_item": "luva",
+                "min_confidence": 0.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }],
+        })
+
+        entrada = []
+
+        for frame, ts in ((1, BASE), (2, BASE + 1000)):
+            entrada.extend(
+                frame_messages(frame, ts, sources=("cam0",))
+            )
+
+            if frame == 1:
+                entrada.append(envelope(
+                    "ods.i9.ppe_compliance",
+                    "cam0",
+                    frame,
+                    ts,
+                    {
+                        "frame_index": frame,
+                        "detection_id": 0,
+                        "uncertain": False,
+                        "items": [{
+                            "equipment_item": "luva",
+                            "compliance": "ABSENT",
+                            "confidence": 0.95,
+                        }],
+                    },
+                    "I9",
+                ))
+
+        saida = motor.processar_mensagens(entrada)
+        eventos = [
+            mensagem["payload"]
+            for mensagem in saida
+            if mensagem["schema"] == "ods.s2.event"
+        ]
+
+        self.assertEqual(
+            [evento["phase"] for evento in eventos],
+            ["STARTED", "ENDED"],
+        )
+
 
     def test_reidentifica_track_id_novo_dentro_do_ttl_por_proximidade(self):
         motor = MotorGerenciamentoEstadoConcorrente(ttl_threshold_ms=5000)

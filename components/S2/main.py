@@ -1,11 +1,13 @@
+
 """Ponto de entrada do componente S2 (arquitetura ODS 6c, interfaces 1.0).
 
-Entrada: array de mensagens com envelope comum, normalmente ods.i2.tracks
-e mensagens ods.s1.position, ods.s1.zone_transition e ods.s1.zone_occupancy.
+Entrada: array de mensagens com envelope comum.
 
 Saída: array de mensagens ods.s2.entity e ods.s2.event.
 
-As regras são lidas do artefato RULES informado por --rules.
+Artefatos:
+- RULES: regras de processamento.
+- PPE_CATALOG: catálogo de equipamentos de proteção individual.
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ if __package__:
         CAMINHO_ENTRADA_S2_FUSAO,
         CAMINHO_REGRAS_S2,
         CAMINHO_REGRAS_S2_EXEMPLO,
+        CAMINHO_PPE_CATALOG_S2,
+        CAMINHO_PPE_CATALOG_S2_EXEMPLO,
         CAMINHO_SAIDA_S2,
     )
     from .filtro_ruido_temporal import FiltroRuidoTemporal
@@ -36,6 +40,8 @@ else:
         CAMINHO_ENTRADA_S2_FUSAO,
         CAMINHO_REGRAS_S2,
         CAMINHO_REGRAS_S2_EXEMPLO,
+        CAMINHO_PPE_CATALOG_S2,
+        CAMINHO_PPE_CATALOG_S2_EXEMPLO,
         CAMINHO_SAIDA_S2,
     )
     from filtro_ruido_temporal import FiltroRuidoTemporal
@@ -45,28 +51,28 @@ else:
 class CamadaS2:
     """Orquestra os mecanismos temporais e o estado do componente S2."""
 
+    
     def __init__(
         self,
         artefato_regras: dict[str, Any] | None = None,
+        artefato_ppe_catalog: dict[str, Any] | None = None,
     ) -> None:
         self.filtro_temporal = FiltroRuidoTemporal()
 
         self.motor_estado = MotorGerenciamentoEstadoConcorrente(
-            filtro_temporal=self.filtro_temporal
+            filtro_temporal=self.filtro_temporal,
+            artefato_ppe_catalog=artefato_ppe_catalog,
         )
 
         if artefato_regras is not None:
             self.motor_estado.carregar_regras(artefato_regras)
 
+
     def processar_eventos(
         self,
         fluxo_bruto: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Processa mensagens de entrada conforme os contratos registrados.
-
-        O filtro temporal é utilizado internamente pelo motor de estado.
-        A camada principal não descarta mensagens ou quadros diretamente.
-        """
+        """Processa mensagens de entrada conforme os contratos registrados."""
         return self.motor_estado.processar_mensagens(fluxo_bruto)
 
 
@@ -88,8 +94,6 @@ def _ler_mensagens(caminho: Path) -> list[dict[str, Any]]:
     dados = _ler_json(caminho)
 
     if isinstance(dados, dict):
-        # Aceita um envelope de lote explícito.
-        # Caso contrário, considera o objeto como uma única mensagem.
         if isinstance(dados.get("messages"), list):
             dados = dados["messages"]
         else:
@@ -113,17 +117,8 @@ def _ler_mensagens(caminho: Path) -> list[dict[str, Any]]:
 def _ler_regras(
     caminho_solicitado: Path | None,
 ) -> tuple[dict[str, Any] | None, Path | None]:
-    """Carrega o artefato RULES.
+    """Carrega o artefato RULES."""
 
-    Ordem de procura:
-    1. Caminho informado explicitamente por --rules.
-    2. Artefato RULES padrão.
-    3. Arquivo de regras demonstrativas.
-
-    Se nenhum arquivo existir, o S2 será executado sem regras.
-    """
-
-    # 1. Caminho informado explicitamente.
     if caminho_solicitado is not None:
         if not caminho_solicitado.exists():
             raise FileNotFoundError(
@@ -140,7 +135,6 @@ def _ler_regras(
 
         return dados, caminho_solicitado
 
-    # 2. Artefato RULES padrão.
     if CAMINHO_REGRAS_S2.exists():
         dados = _ler_json(CAMINHO_REGRAS_S2)
 
@@ -152,7 +146,6 @@ def _ler_regras(
 
         return dados, CAMINHO_REGRAS_S2
 
-    # 3. Regras demonstrativas.
     if CAMINHO_REGRAS_S2_EXEMPLO.exists():
         dados = _ler_json(CAMINHO_REGRAS_S2_EXEMPLO)
 
@@ -175,10 +168,94 @@ def _ler_regras(
     return None, None
 
 
+def _validar_ppe_catalog(dados: Any, caminho: Path) -> dict[str, Any]:
+    """Valida a estrutura básica do artefato PPE_CATALOG."""
+
+    if not isinstance(dados, dict):
+        raise ValueError(
+            f"O PPE_CATALOG deve ser um objeto JSON: {caminho}"
+        )
+
+    if not isinstance(dados.get("catalog_version"), str):
+        raise ValueError(
+            f"O PPE_CATALOG de {caminho} deve possuir "
+            "catalog_version como texto"
+        )
+
+    if not isinstance(dados.get("items"), list):
+        raise ValueError(
+            f"O PPE_CATALOG de {caminho} deve possuir "
+            "items como lista"
+        )
+
+    if not isinstance(dados.get("required"), list):
+        raise ValueError(
+            f"O PPE_CATALOG de {caminho} deve possuir "
+            "required como lista"
+        )
+
+    return dados
+
+
+def _ler_ppe_catalog(
+    caminho_solicitado: Path | None,
+) -> tuple[dict[str, Any] | None, Path | None]:
+    """Carrega o artefato PPE_CATALOG.
+
+    Ordem de procura:
+    1. Caminho informado explicitamente por --ppe-catalog.
+    2. Artefato PPE_CATALOG padrão.
+    3. Arquivo demonstrativo.
+
+    Se nenhum arquivo existir, o S2 será executado sem catálogo.
+    """
+
+    if caminho_solicitado is not None:
+        if not caminho_solicitado.exists():
+            raise FileNotFoundError(
+                f"Artefato PPE_CATALOG não encontrado: "
+                f"{caminho_solicitado}"
+            )
+
+        dados = _validar_ppe_catalog(
+            _ler_json(caminho_solicitado),
+            caminho_solicitado,
+        )
+
+        return dados, caminho_solicitado
+
+    if CAMINHO_PPE_CATALOG_S2.exists():
+        dados = _validar_ppe_catalog(
+            _ler_json(CAMINHO_PPE_CATALOG_S2),
+            CAMINHO_PPE_CATALOG_S2,
+        )
+
+        return dados, CAMINHO_PPE_CATALOG_S2
+
+    if CAMINHO_PPE_CATALOG_S2_EXEMPLO.exists():
+        dados = _validar_ppe_catalog(
+            _ler_json(CAMINHO_PPE_CATALOG_S2_EXEMPLO),
+            CAMINHO_PPE_CATALOG_S2_EXEMPLO,
+        )
+
+        print(
+            f"[AVISO] {CAMINHO_PPE_CATALOG_S2} não existe; "
+            f"usando catálogo demonstrativo de "
+            f"{CAMINHO_PPE_CATALOG_S2_EXEMPLO}. "
+            "Para uso real, forneça seu artefato PPE_CATALOG.",
+            file=sys.stderr,
+        )
+
+        return dados, CAMINHO_PPE_CATALOG_S2_EXEMPLO
+
+    return None, None
+
+
 def executar(
     caminho_entrada: Path,
     caminho_saida: Path,
     caminho_regras: Path | None = None,
+    caminho_ppe_catalog: Path | None = None,
 ) -> int:
     """Executa o processamento completo do componente S2."""
 
@@ -194,13 +271,20 @@ def executar(
         # 1. Leitura das mensagens de entrada.
         mensagens = _ler_mensagens(caminho_entrada)
 
-        # 2. Carregamento das regras.
+        # 2. Carregamento dos artefatos.
         artefato_regras, origem_regras = _ler_regras(
             caminho_regras
         )
 
+        artefato_ppe_catalog, origem_ppe_catalog = (
+            _ler_ppe_catalog(caminho_ppe_catalog)
+        )
+
         # 3. Inicialização da camada S2.
-        s2 = CamadaS2(artefato_regras)
+        s2 = CamadaS2(
+            artefato_regras=artefato_regras,
+            artefato_ppe_catalog=artefato_ppe_catalog,
+        )
 
         # 4. Processamento das mensagens.
         mensagens_saida = s2.processar_eventos(mensagens)
@@ -259,9 +343,20 @@ def executar(
     )
 
     print(
-        f"Regras: "
+        "Regras: "
         f"{origem_regras if origem_regras else 'nenhum artefato RULES carregado'}"
     )
+
+    print(
+        "PPE_CATALOG: "
+        f"{origem_ppe_catalog if origem_ppe_catalog else 'nenhum catálogo carregado'}"
+    )
+
+    if artefato_ppe_catalog is not None:
+        print(
+            "Versão do PPE_CATALOG: "
+            f"{artefato_ppe_catalog['catalog_version']}"
+        )
 
     print(
         f"Saída: {caminho_saida} "
@@ -318,6 +413,17 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--ppe-catalog",
+        type=Path,
+        default=None,
+        help=(
+            "Artefato PPE_CATALOG; por padrão procura "
+            f"{CAMINHO_PPE_CATALOG_S2} e depois "
+            f"{CAMINHO_PPE_CATALOG_S2_EXEMPLO}"
+        ),
+    )
+
+    parser.add_argument(
         "--fusao-mock",
         action="store_true",
         help=(
@@ -331,8 +437,6 @@ def main() -> int:
 
     entrada = args.input
 
-    # O modo de fusão mock só substitui a entrada padrão.
-    # Uma entrada informada explicitamente pelo usuário é preservada.
     if (
         args.fusao_mock
         and args.input == CAMINHO_ENTRADA_S2
@@ -343,6 +447,7 @@ def main() -> int:
         caminho_entrada=entrada,
         caminho_saida=args.output,
         caminho_regras=args.rules,
+        caminho_ppe_catalog=args.ppe_catalog,
     )
 
 

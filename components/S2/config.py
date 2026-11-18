@@ -1,7 +1,8 @@
+
 """Configuracao local do prototipo S2 alinhada a arquitetura ODS 6c.
 
-RULES e um artefato versionado da aplicacao. O motor recebe seu conteudo por
-carregar_regras(); os parametros tecnicos de fusao ficam separados do artefato.
+RULES e PPE_CATALOG sao artefatos versionados da aplicacao.
+Os parametros tecnicos de fusao ficam separados desses artefatos.
 """
 
 from pathlib import Path
@@ -25,13 +26,23 @@ CAMINHO_SAIDA_S2 = (
 )
 
 
-# Artefatos de regras.
+# Artefatos RULES.
 CAMINHO_REGRAS_S2 = (
     DIRETORIO_DADOS / "regras_s2.json"
 )
 
 CAMINHO_REGRAS_S2_EXEMPLO = (
     Path(__file__).resolve().parent / "regras_s2.exemplo.json"
+)
+
+
+# Artefatos PPE_CATALOG.
+CAMINHO_PPE_CATALOG_S2 = (
+    DIRETORIO_DADOS / "ppe_catalog.json"
+)
+
+CAMINHO_PPE_CATALOG_S2_EXEMPLO = (
+    DIRETORIO_DADOS / "ppe_catalog.exemplo.json"
 )
 
 
