@@ -1257,6 +1257,7 @@ class MotorGerenciamentoEstadoConcorrente:
 
         return canonico
 
+   
     def _clusterizar_observacoes(
         self,
         observacoes: list[dict[str, Any]],
@@ -1274,57 +1275,52 @@ class MotorGerenciamentoEstadoConcorrente:
         )
 
         for obs in ordenadas:
-            encaixe: list[dict[str, Any]] | None = None
+            melhor_encaixe: list[dict[str, Any]] | None = None
+            menor_distancia = float("inf")
 
             if obs.get("position_m") is not None and obs.get("space_id"):
                 for cluster in clusters:
-                    # Uma fonte não pode aparecer duas vezes no mesmo cluster.
-                    # Uma fonte não pode aparecer duas vezes no mesmo cluster.
                     if any(
                         item["source_id"] == obs["source_id"]
                         for item in cluster
                     ):
                         continue
 
-                    # Não associar objetos de classes distintas, mesmo que
-                    # estejam próximos no mesmo espaço e instante.
                     if any(
                         item.get("class") != obs.get("class")
                         for item in cluster
                     ):
                         continue
 
-                    referencia = next(
-                        (
-                            item
-                            for item in cluster
-                            if item.get("position_m") is not None
-                            and item.get("space_id") == obs["space_id"]
-                        ),
-                        None,
-                    )
+                    for referencia in cluster:
+                        if (
+                            referencia.get("position_m") is None
+                            or referencia.get("space_id") != obs["space_id"]
+                        ):
+                            continue
 
-                    if referencia is None:
-                        continue
+                        delta_t = abs(
+                            obs["timestamp_ms"] - referencia["timestamp_ms"]
+                        )
+                        if delta_t > self.time_sync_threshold_ms:
+                            continue
 
-                    delta_t = abs(
-                        obs["timestamp_ms"] - referencia["timestamp_ms"]
-                    )
-                    if delta_t > self.time_sync_threshold_ms:
-                        continue
+                        x1, y1 = obs["position_m"]
+                        x2, y2 = referencia["position_m"]
+                        distancia = math.hypot(x1 - x2, y1 - y2)
 
-                    x1, y1 = obs["position_m"]
-                    x2, y2 = referencia["position_m"]
+                        if (
+                            distancia <= self.merge_distance_threshold
+                            and distancia < menor_distancia
+                        ):
+                            menor_distancia = distancia
+                            melhor_encaixe = cluster
 
-                    distancia = math.hypot(x1 - x2, y1 - y2)
-                    if distancia <= self.merge_distance_threshold:
-                        encaixe = cluster
-                        break
-
-            if encaixe is None:
+            # Este bloco fica fora dos loops de busca.
+            if melhor_encaixe is None:
                 clusters.append([obs])
             else:
-                encaixe.append(obs)
+                melhor_encaixe.append(obs)
 
         # Consolida IDs quando rastros de fontes diferentes foram fundidos.
         for cluster in clusters:
@@ -1371,6 +1367,18 @@ class MotorGerenciamentoEstadoConcorrente:
                     if (
                         anterior.get("class")
                         and obs.get("class") != anterior.get("class")
+                    ):
+                        continue
+
+                    # Entre câmeras, respeitar a janela de sincronismo.
+                    # Na mesma câmera, preservar a reidentificação pelo TTL.
+                    if (
+                        anterior.get("source_id") is not None
+                        and obs["source_id"] != anterior.get("source_id")
+                        and abs(
+                            obs["timestamp_ms"]
+                            - int(anterior["last_seen_ms"])
+                        ) > self.time_sync_threshold_ms
                     ):
                         continue
 
