@@ -1,26 +1,31 @@
+"""Configuração local do protótipo S2 alinhada à arquitetura ODS 6c.
 
-"""Configuracao local do prototipo S2 alinhada a arquitetura ODS 6c.
-
-RULES e PPE_CATALOG sao artefatos versionados da aplicacao.
-Os parametros tecnicos de fusao ficam separados desses artefatos.
+RULES e PPE_CATALOG são artefatos versionados da aplicação.
+Os parâmetros técnicos de fusão ficam separados desses artefatos.
 """
 
 from pathlib import Path
 
 
-# Diretorios principais.
+# Diretórios principais.
 DIRETORIO_DADOS = Path("data")
 DIRETORIO_SAIDA_S2 = DIRETORIO_DADOS / "output_s2"
 
 
-# Arquivos de entrada e saida.
+# Arquivos de entrada e saída.
+# Entrada padrão: mensagens produzidas pelo componente S1.
 CAMINHO_ENTRADA_S2 = (
     DIRETORIO_DADOS / "output" / "eventos_s1.json"
 )
 
-# Mantido para compatibilidade com os testes de fusao.
-CAMINHO_ENTRADA_S2_FUSAO = CAMINHO_ENTRADA_S2
+CAMINHO_ENTRADA_S2_MOCK = DIRETORIO_DADOS / "entrada_s2_mock.json"
 
+# Entrada exclusivamente demonstrativa para testes de fusão multicâmera.
+CAMINHO_ENTRADA_S2_FUSAO = (
+    DIRETORIO_DADOS / "entrada_s2_fusao_mock.json"
+)
+
+# Saída padrão do componente S2.
 CAMINHO_SAIDA_S2 = (
     DIRETORIO_SAIDA_S2 / "eventos_s2.json"
 )
@@ -46,8 +51,8 @@ CAMINHO_PPE_CATALOG_S2_EXEMPLO = (
 )
 
 
-# Parametros tecnicos de fusao multicamera.
-# A associacao entre cameras ocorre somente em coordenadas metricas
+# Parâmetros técnicos de fusão multicâmera.
+# A associação entre câmeras ocorre somente em coordenadas métricas
 # dentro do mesmo space_id.
 
 DISTANCIA_FUSAO_M = 2.0
@@ -56,7 +61,7 @@ TTL_ENTIDADE_MS = 5000
 REIDENTIFICACAO_PIXELS = 80.0
 
 
-# Versoes dos contratos e artefatos.
+# Versões dos contratos e artefatos.
 SCHEMA_VERSION = "1.0"
 
 ARTIFACT_VERSION_FUSAO = "s2-fusion-1"
@@ -65,7 +70,7 @@ ARTIFACT_VERSION_MOCK_S1 = "zones-mot20-mock-1"
 ARTIFACT_VERSION_MOCK_CALIBRACAO = "cal-mock-world-1"
 
 
-# Configuracoes utilizadas exclusivamente nos mocks.
+# Configurações utilizadas exclusivamente nos mocks.
 SESSION_ID_MOCK = "9c2a1f3e-4d5b-4c6a-9e8f-0a1b2c3d4e5f"
 
 TIMESTAMP_BASE_MOCK = "2026-09-23T14:00:00.000Z"
@@ -73,9 +78,9 @@ TIMESTAMP_BASE_MOCK = "2026-09-23T14:00:00.000Z"
 FPS_MOCK = 25
 
 
-# Escala ficticia usada APENAS no fixture de fusao multicamera.
-# Os dados MOT20 sao pixels; esta transformacao nao e uma calibracao real
-# da instalacao.
+# Escala fictícia usada APENAS no fixture de fusão multicâmera.
+# Os dados MOT20 são pixels; esta transformação não é uma calibração real
+# da instalação.
 
 ESCALA_PIXEL_PARA_METRO_MOCK = 0.01
 

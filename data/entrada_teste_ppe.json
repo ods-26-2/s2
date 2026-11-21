@@ -50,6 +50,14 @@
     "payload": {
       "frame_index": 100,
       "detection_id": 0,
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -111,6 +119,14 @@
     "payload": {
       "frame_index": 101,
       "detection_id": 0,
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -172,6 +188,14 @@
     "payload": {
       "frame_index": 102,
       "detection_id": 0,
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -233,6 +257,14 @@
     "payload": {
       "frame_index": 103,
       "detection_id": 0,
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -294,6 +326,14 @@
     "payload": {
       "frame_index": 104,
       "detection_id": 0,
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {

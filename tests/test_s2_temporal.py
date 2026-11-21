@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import unittest
@@ -132,70 +133,37 @@ class TestMotorS2(unittest.TestCase):
         eventos = [m["payload"] for m in saida if m["schema"] == "ods.s2.event"]
         self.assertEqual([e["phase"] for e in eventos], ["STARTED"])
 
-    
-    def test_evento_ppe_encerra_apos_ttl_sem_observacao(self):
-        motor = MotorGerenciamentoEstadoConcorrente(
-            ttl_threshold_ms=5000
-        )
-        motor.carregar_regras({
-            "artifact_version": "rules-ppe-ttl-1",
-            "rules": [{
-                "rule_id": "ppe-ttl-test",
-                "event_type": "PPE_NON_COMPLIANT",
-                "equipment_item": "luva",
-                "min_confidence": 0.5,
-                "uncertain_below": 0.8,
-                "min_duration_ms": 0,
-                "debounce_ms": 0,
-            }],
-        })
+    def test_ppe_catalog_rejeita_identificadores_com_espacos(self):
+        catalogo = {
+            "catalog_version": "ppe-catalog-whitespace-1",
+            "items": [
+                {
+                    "equipment_item": " luva ",
+                    "name": "Luvas",
+                    "body_part": "HANDS",
+                }
+            ],
+            "required": [
+                {
+                    "zone_id": "galpao-solda",
+                    "items": [" luva "],
+                }
+            ],
+        }
 
-        entrada = []
-
-        for frame, ts in ((1, BASE), (2, BASE + 6001)):
-            entrada.extend(
-                frame_messages(
-                    frame,
-                    ts,
-                    sources=("cam0",),
-                )
+        with self.assertRaises(ValueError):
+            MotorGerenciamentoEstadoConcorrente(
+                artefato_ppe_catalog=catalogo
             )
 
-            if frame == 1:
-                entrada.append(envelope(
-                    "ods.i9.ppe_compliance",
-                    "cam0",
-                    frame,
-                    ts,
-                    {
-                        "frame_index": frame,
-                        "detection_id": 0,
-                        "uncertain": False,
-                        "items": [{
-                            "equipment_item": "luva",
-                            "compliance": "ABSENT",
-                            "confidence": 0.95,
-                        }],
-                    },
-                    "I9",
-                ))
+        catalogo["items"][0]["equipment_item"] = "luva"
+        catalogo["required"][0]["items"] = ["luva"]
+        catalogo["required"][0]["zone_id"] = " galpao-solda "
 
-        # A segunda observação ocorre depois do TTL, mas a entidade
-        # continua presente. Para testar ausência real, removemos
-        # as mensagens do segundo quadro.
-        entrada = [
-            mensagem
-            for mensagem in entrada
-            if mensagem["payload"].get("frame_index") == 1
-        ]
-
-        saida = motor.processar_mensagens(entrada)
-
-        # Processa um quadro posterior sem a entidade, usando
-        # uma mensagem válida de outra entidade como referência.
-        # O teste será complementado após verificarmos o mecanismo
-        # de expiração do estado.
-
+        with self.assertRaises(ValueError):
+            MotorGerenciamentoEstadoConcorrente(
+                artefato_ppe_catalog=catalogo
+            )
 
     def test_evento_ppe_encerra_apos_ttl_sem_observacao(self):
         motor = MotorGerenciamentoEstadoConcorrente(
@@ -214,9 +182,7 @@ class TestMotorS2(unittest.TestCase):
             }],
         })
 
-        entrada = frame_messages(
-            1, BASE, sources=("cam0",)
-        )
+        entrada = frame_messages(1, BASE, sources=("cam0",))
 
         entrada.append(envelope(
             "ods.i9.ppe_compliance",
@@ -225,6 +191,9 @@ class TestMotorS2(unittest.TestCase):
             BASE,
             {
                 "frame_index": 1,
+                "bbox": [90, 100, 110, 200],
+                "calibrated": False,
+                "catalog_version": "ppe-catalog-1",
                 "detection_id": 0,
                 "uncertain": False,
                 "items": [{
@@ -236,7 +205,6 @@ class TestMotorS2(unittest.TestCase):
             "I9",
         ))
 
-        # Quadro posterior sem nenhuma pessoa.
         entrada.extend([
             envelope(
                 "ods.i2.tracks",
@@ -274,7 +242,6 @@ class TestMotorS2(unittest.TestCase):
         )
         self.assertEqual(eventos[1]["equipment_item"], "luva")
         self.assertEqual(eventos[1]["zone_id"], "zona-demo")
-
 
     def test_ppe_separa_condicoes_por_zona_e_equipamento(self):
         catalogo = {
@@ -320,6 +287,9 @@ class TestMotorS2(unittest.TestCase):
             BASE,
             {
                 "frame_index": 1,
+                "bbox": [90, 100, 110, 200],
+                "calibrated": False,
+                "catalog_version": "ppe-catalog-1",
                 "detection_id": 0,
                 "uncertain": False,
                 "items": [
@@ -362,7 +332,6 @@ class TestMotorS2(unittest.TestCase):
             all(evento["phase"] == "STARTED" for evento in eventos)
         )
 
-
     def test_correlaciona_i9_com_i2_por_detection_id_e_quadro(self):
         motor = MotorGerenciamentoEstadoConcorrente()
         motor.carregar_regras({
@@ -380,6 +349,9 @@ class TestMotorS2(unittest.TestCase):
                 "ods.i9.ppe_compliance", "cam0", frame, ts,
                 {
                     "frame_index": frame,
+                    "bbox": [90, 100, 110, 200],
+                    "calibrated": False,
+                    "catalog_version": "ppe-catalog-1",
                     "detection_id": 0,
                     "uncertain": False,
                     "items": [
@@ -398,7 +370,6 @@ class TestMotorS2(unittest.TestCase):
         self.assertEqual(eventos[0]["equipment_item"], "luva")
         self.assertEqual(eventos[0]["status"], "UNCERTAIN")
 
-    
     def test_ppe_catalog_avalia_somente_itens_observados_e_obrigatorios(self):
         catalogo = {
             "catalog_version": "ppe-catalog-test-1",
@@ -445,6 +416,9 @@ class TestMotorS2(unittest.TestCase):
             BASE,
             {
                 "frame_index": 1,
+                "bbox": [90, 100, 110, 200],
+                "calibrated": False,
+                "catalog_version": "ppe-catalog-1",
                 "detection_id": 0,
                 "uncertain": False,
                 "items": [{
@@ -499,6 +473,9 @@ class TestMotorS2(unittest.TestCase):
                     ts,
                     {
                         "frame_index": frame,
+                        "bbox": [90, 100, 110, 200],
+                        "calibrated": False,
+                        "catalog_version": "ppe-catalog-1",
                         "detection_id": 0,
                         "uncertain": False,
                         "items": [{
@@ -521,7 +498,6 @@ class TestMotorS2(unittest.TestCase):
             [evento["phase"] for evento in eventos],
             ["STARTED", "ENDED"],
         )
-
 
     def test_reidentifica_track_id_novo_dentro_do_ttl_por_proximidade(self):
         motor = MotorGerenciamentoEstadoConcorrente(ttl_threshold_ms=5000)
@@ -568,6 +544,55 @@ class TestMotorS2(unittest.TestCase):
         self.assertIn("message_id", entidade)
         self.assertIn("captured_at", entidade)
 
+
+
+    def test_i9_rejeita_campos_obrigatorios_invalidos(self):
+        casos_invalidos = [
+            ("bbox ausente", "bbox", None),
+            ("calibrated inválido", "calibrated", "false"),
+            ("catalog_version vazia", "catalog_version", ""),
+        ]
+
+        for descricao, campo, valor in casos_invalidos:
+            with self.subTest(caso=descricao):
+                motor = MotorGerenciamentoEstadoConcorrente()
+                motor.carregar_regras(rules(min_duration_ms=0))
+
+                payload = {
+                    "frame_index": 1,
+                    "detection_id": 0,
+                    "bbox": [90, 100, 110, 200],
+                    "calibrated": False,
+                    "catalog_version": "ppe-catalog-1",
+                    "uncertain": False,
+                    "items": [
+                        {
+                            "equipment_item": "luva",
+                            "compliance": "ABSENT",
+                            "confidence": 0.7,
+                        }
+                    ],
+                }
+
+                if valor is None:
+                    payload.pop(campo)
+                else:
+                    payload[campo] = valor
+
+                entrada = frame_messages(1, BASE, sources=("cam0",))
+                entrada.append(
+                    envelope(
+                        "ods.i9.ppe_compliance",
+                        "cam0",
+                        1,
+                        BASE,
+                        payload,
+                        "I9",
+                    )
+                )
+
+                with self.assertRaises(ValueError):
+                    motor.processar_mensagens(entrada)
 
 if __name__ == "__main__":
     unittest.main()

@@ -57,7 +57,15 @@
           "compliance": "INCORRECT",
           "confidence": 0.95
         }
-      ]
+      ],
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1"
     }
   },
   {
@@ -148,7 +156,15 @@
           "compliance": "INCORRECT",
           "confidence": 0.95
         }
-      ]
+      ],
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1"
     }
   },
   {
@@ -239,7 +255,15 @@
           "compliance": "INCORRECT",
           "confidence": 0.95
         }
-      ]
+      ],
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1"
     }
   },
   {
@@ -330,7 +354,15 @@
           "compliance": "CORRECT",
           "confidence": 0.95
         }
-      ]
+      ],
+      "bbox": [
+        412,
+        180,
+        598,
+        702
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1"
     }
   },
   {

@@ -77,6 +77,9 @@ for frame_index, (captured_at, compliance) in enumerate(quadros, start=100):
         "payload": {
             "frame_index": frame_index,
             "detection_id": 0,
+            "bbox": [412, 180, 598, 702],
+            "calibrated": False,
+            "catalog_version": "ppe-catalog-1",
             "uncertain": False,
             "items": [
                 {

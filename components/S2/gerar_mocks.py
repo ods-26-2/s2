@@ -18,20 +18,34 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+
 try:  # execução como pacote
     from .config import (
-        ARTIFACT_VERSION_MOCK_I2, ARTIFACT_VERSION_MOCK_S1, CAMINHO_ENTRADA_S2,
-        CAMINHO_ENTRADA_S2_FUSAO, DESLOCAMENTO_CAM2_X_MOCK, DESLOCAMENTO_CAM2_Y_MOCK,
-        ESCALA_PIXEL_PARA_METRO_MOCK, FPS_MOCK, SESSION_ID_MOCK, TIMESTAMP_BASE_MOCK,
-        TREINO_MOT20_ESCOLHIDO,
+        ARTIFACT_VERSION_MOCK_I2,
+        ARTIFACT_VERSION_MOCK_S1,
+        CAMINHO_ENTRADA_S2_MOCK,
+        CAMINHO_ENTRADA_S2_FUSAO,
+        DESLOCAMENTO_CAM2_X_MOCK,
+        DESLOCAMENTO_CAM2_Y_MOCK,
+        ESCALA_PIXEL_PARA_METRO_MOCK,
+        FPS_MOCK,
+        SESSION_ID_MOCK,
+        TIMESTAMP_BASE_MOCK,
     )
 except ImportError:  # execução direta a partir de components/S2
     from config import (
-        ARTIFACT_VERSION_MOCK_I2, ARTIFACT_VERSION_MOCK_S1, CAMINHO_ENTRADA_S2,
-        CAMINHO_ENTRADA_S2_FUSAO, DESLOCAMENTO_CAM2_X_MOCK, DESLOCAMENTO_CAM2_Y_MOCK,
-        ESCALA_PIXEL_PARA_METRO_MOCK, FPS_MOCK, SESSION_ID_MOCK, TIMESTAMP_BASE_MOCK,
-        TREINO_MOT20_ESCOLHIDO,
+        ARTIFACT_VERSION_MOCK_I2,
+        ARTIFACT_VERSION_MOCK_S1,
+        CAMINHO_ENTRADA_S2_MOCK,
+        CAMINHO_ENTRADA_S2_FUSAO,
+        DESLOCAMENTO_CAM2_X_MOCK,
+        DESLOCAMENTO_CAM2_Y_MOCK,
+        ESCALA_PIXEL_PARA_METRO_MOCK,
+        FPS_MOCK,
+        SESSION_ID_MOCK,
+        TIMESTAMP_BASE_MOCK,
     )
+
 
 _NAMESPACE_MOCK = uuid.UUID(SESSION_ID_MOCK)
 
@@ -180,7 +194,7 @@ def _gerar_mensagens(
             sequencias["I2"] += 1
             mensagens.append(_envelope(
                 schema="ods.s1.position", producer="S1", source_id=source_id,
-                artifact_version=(ARTIFACT_VERSION_MOCK_S1 if not multicamera else "zones-mock-calibrated-fixture-1"),
+                artifact_version=(ARTIFACT_VERSION_MOCK_S1 if not multicamera else "zones-mock-synthetic-1"),
                 frame_index=frame_index, captured_at=captured_at,
                 payload={"frame_index": frame_index, "positions": positions},
                 sequence=sequencias["S1"],
@@ -192,7 +206,7 @@ def _gerar_mensagens(
 
 def construir_jsons_de_teste(
     caminho_gt: str | Path,
-    saida_s1: str | Path = CAMINHO_ENTRADA_S2,
+    saida_s1: str | Path = CAMINHO_ENTRADA_S2_MOCK,
     saida_fusao: str | Path = CAMINHO_ENTRADA_S2_FUSAO,
     limite_frames: int | None = 30,
     limite_deteccoes: int = 2000,
@@ -218,11 +232,12 @@ def construir_jsons_de_teste(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Gera fixtures JSON compativeis com interfaces ODS 6c.")
     parser.add_argument(
-        "--gt", type=Path,
-        default=Path(f"MOT20/train/MOT20-0{TREINO_MOT20_ESCOLHIDO}/gt/gt.txt"),
+        "--gt",
+        type=Path,
+        required=True,
         help="Caminho para gt.txt do MOT20",
     )
-    parser.add_argument("--output", type=Path, default=CAMINHO_ENTRADA_S2)
+    parser.add_argument("--output", type=Path, default=CAMINHO_ENTRADA_S2_MOCK)
     parser.add_argument("--fusion-output", type=Path, default=CAMINHO_ENTRADA_S2_FUSAO)
     parser.add_argument("--frames", type=int, default=30, help="Numero maximo de quadros; 0 significa todos")
     parser.add_argument("--detections", type=int, default=2000, help="Numero maximo de deteccoes validas")

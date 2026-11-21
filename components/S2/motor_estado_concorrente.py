@@ -142,7 +142,7 @@ def _validar_lista_strings(valor: Any, campo: str) -> list[str]:
     if not isinstance(valor, list):
         raise ValueError(f"{campo} deve ser um array")
 
-    if any(not isinstance(item, str) or not item.strip() for item in valor):
+    if any(not isinstance(item, str) or not item or item != item.strip() for item in valor):
         raise ValueError(f"{campo} deve conter somente strings não vazias")
 
     return list(valor)
@@ -413,7 +413,7 @@ class MotorGerenciamentoEstadoConcorrente:
             nome = item.get("name")
             parte_corpo = item.get("body_part")
 
-            if not isinstance(equipamento, str) or not equipamento.strip():
+            if not isinstance(equipamento, str) or not equipamento or equipamento != equipamento.strip():
                 raise ValueError(
                     f"items[{indice}].equipment_item deve ser "
                     "string não vazia"
@@ -449,7 +449,7 @@ class MotorGerenciamentoEstadoConcorrente:
             zona = exigencia_original.get("zone_id")
             equipamentos = exigencia_original.get("items")
 
-            if not isinstance(zona, str) or not zona.strip():
+            if not isinstance(zona, str) or not zona or zona != zona.strip():
                 raise ValueError(
                     f"required[{indice}].zone_id deve ser "
                     "string não vazia"
@@ -1062,6 +1062,59 @@ class MotorGerenciamentoEstadoConcorrente:
                     )
 
                 payload_ppe = _payload(msg_ppe)
+
+                frame_index_ppe = payload_ppe.get("frame_index")
+                if (
+                    not isinstance(frame_index_ppe, int)
+                    or isinstance(frame_index_ppe, bool)
+                    or frame_index_ppe < 0
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.frame_index "
+                        "integer >= 0"
+                    )
+
+                if frame_index_ppe != quadro["frame_index"]:
+                    raise ValueError(
+                        "I9 precisa pertencer ao mesmo frame_index "
+                        "do quadro agrupado"
+                    )
+
+                bbox_ppe = payload_ppe.get("bbox")
+                if (
+                    not isinstance(bbox_ppe, list)
+                    or len(bbox_ppe) != 4
+                    or any(not _numero_finito(valor) for valor in bbox_ppe)
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.bbox "
+                        "com quatro números finitos"
+                    )
+
+                x_min, y_min, x_max, y_max = bbox_ppe
+                if x_min > x_max or y_min > y_max:
+                    raise ValueError(
+                        "payload.bbox deve respeitar "
+                        "x_min <= x_max e y_min <= y_max"
+                    )
+
+                calibrated_ppe = payload_ppe.get("calibrated")
+                if not isinstance(calibrated_ppe, bool):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.calibrated boolean"
+                    )
+
+                catalog_version_ppe = payload_ppe.get("catalog_version")
+                if (
+                    not isinstance(catalog_version_ppe, str)
+                    or not catalog_version_ppe
+                    or catalog_version_ppe != catalog_version_ppe.strip()
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.catalog_version "
+                        "como string não vazia e sem espaços nas extremidades"
+                    )
+
                 detection_id_ppe = payload_ppe.get("detection_id")
 
                 if (
@@ -1106,13 +1159,18 @@ class MotorGerenciamentoEstadoConcorrente:
 
                     if (
                         not isinstance(equipamento, str)
-                        or not equipamento.strip()
+                        or not equipamento
+                        or equipamento != equipamento.strip()
                     ):
                         raise ValueError(
-                            "items[].equipment_item deve ser string não vazia"
+                            "items[].equipment_item deve ser string não vazia "
+                            "e sem espaços nas extremidades"
                         )
 
-                    if compliance not in COMPLIANCE_VALIDOS:
+                    if (
+                        not isinstance(compliance, str)
+                        or compliance not in COMPLIANCE_VALIDOS
+                    ):
                         raise ValueError(
                             f"Compliance inválido para {equipamento!r}: "
                             f"{compliance!r}"

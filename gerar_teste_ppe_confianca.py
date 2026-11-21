@@ -71,6 +71,9 @@ for i, status in enumerate(status_por_quadro):
         "payload": {
             "frame_index": frame_index,
             "detection_id": 0,
+            "bbox": [280, 180, 360, 300],
+            "calibrated": False,
+            "catalog_version": "ppe-catalog-1",
             "uncertain": False,
             "items": [
                 {

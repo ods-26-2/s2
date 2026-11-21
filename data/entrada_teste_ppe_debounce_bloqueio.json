@@ -1,7 +1,7 @@
 [
   {
-    "message_id": "c2eac558-d7fb-4fb0-b70f-665205aad193",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "5c9d91a6-01ff-4a1b-b036-a126ee754ddb",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 1,
     "captured_at": "2026-11-13T15:00:00Z",
     "published_at": "2026-11-13T15:00:00Z",
@@ -35,8 +35,8 @@
     }
   },
   {
-    "message_id": "2b257815-4c67-4b98-a7e8-7b3e82dc5c5f",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "e2f18ddc-df31-4fba-bcac-b161c2cb51c4",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 2,
     "captured_at": "2026-11-13T15:00:00Z",
     "published_at": "2026-11-13T15:00:00Z",
@@ -48,6 +48,14 @@
     "payload": {
       "frame_index": 100,
       "detection_id": 0,
+      "bbox": [
+        280,
+        180,
+        360,
+        300
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -59,8 +67,8 @@
     }
   },
   {
-    "message_id": "2c791a33-934e-4c59-ac60-c76adef5687a",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "8cd64373-9e33-4e40-9122-ba2e1b326147",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 3,
     "captured_at": "2026-11-13T15:00:00.100000Z",
     "published_at": "2026-11-13T15:00:00.100000Z",
@@ -94,8 +102,8 @@
     }
   },
   {
-    "message_id": "2c208e1b-f81d-4ee3-b44d-5cf778ddb47b",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "e5ab59c6-7263-4fc4-acdb-687110fbe2a0",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 4,
     "captured_at": "2026-11-13T15:00:00.100000Z",
     "published_at": "2026-11-13T15:00:00.100000Z",
@@ -107,6 +115,14 @@
     "payload": {
       "frame_index": 101,
       "detection_id": 0,
+      "bbox": [
+        280,
+        180,
+        360,
+        300
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -118,8 +134,8 @@
     }
   },
   {
-    "message_id": "dd26332d-47ed-4987-a824-f07f54f12fa4",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "795dc246-3d1a-4ea1-8e91-5978dc9e891a",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 5,
     "captured_at": "2026-11-13T15:00:00.200000Z",
     "published_at": "2026-11-13T15:00:00.200000Z",
@@ -153,8 +169,8 @@
     }
   },
   {
-    "message_id": "922cf391-6dfb-4558-baad-c0a5cf2824f7",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "26bd98ac-09ad-443a-8c37-1f2cf3448dd1",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 6,
     "captured_at": "2026-11-13T15:00:00.200000Z",
     "published_at": "2026-11-13T15:00:00.200000Z",
@@ -166,6 +182,14 @@
     "payload": {
       "frame_index": 102,
       "detection_id": 0,
+      "bbox": [
+        280,
+        180,
+        360,
+        300
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -177,8 +201,8 @@
     }
   },
   {
-    "message_id": "558708ff-4d28-433d-adc7-3f830c6799a9",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "6e639dff-8df2-4926-a637-51908588a35a",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 7,
     "captured_at": "2026-11-13T15:00:00.700000Z",
     "published_at": "2026-11-13T15:00:00.700000Z",
@@ -212,8 +236,8 @@
     }
   },
   {
-    "message_id": "cd8749e0-f92f-49db-8221-c8ad90ad5621",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "00149427-d619-44d0-bde1-f4e4e48a0235",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 8,
     "captured_at": "2026-11-13T15:00:00.700000Z",
     "published_at": "2026-11-13T15:00:00.700000Z",
@@ -225,6 +249,14 @@
     "payload": {
       "frame_index": 103,
       "detection_id": 0,
+      "bbox": [
+        280,
+        180,
+        360,
+        300
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
@@ -236,8 +268,8 @@
     }
   },
   {
-    "message_id": "9b4c1836-c2f4-4c6c-8004-589f5a7ef050",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "30166ac1-a0a1-4fbc-80a7-9f558cc2e84f",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 9,
     "captured_at": "2026-11-13T15:00:01.200000Z",
     "published_at": "2026-11-13T15:00:01.200000Z",
@@ -271,8 +303,8 @@
     }
   },
   {
-    "message_id": "21b195a5-d7b6-4eb2-a6ba-f16617c49b0e",
-    "session_id": "d3ea9400-4053-430d-bf38-6180cb726bd6",
+    "message_id": "c5643559-f58f-4aa0-993a-bdcff71d2cd2",
+    "session_id": "ab863d92-5335-425d-8c7a-76ba40dbb6df",
     "sequence": 10,
     "captured_at": "2026-11-13T15:00:01.200000Z",
     "published_at": "2026-11-13T15:00:01.200000Z",
@@ -284,6 +316,14 @@
     "payload": {
       "frame_index": 104,
       "detection_id": 0,
+      "bbox": [
+        280,
+        180,
+        360,
+        300
+      ],
+      "calibrated": false,
+      "catalog_version": "ppe-catalog-1",
       "uncertain": false,
       "items": [
         {
