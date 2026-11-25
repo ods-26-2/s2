@@ -19,7 +19,7 @@ def iso(ms: int) -> str:
 def envelope(schema: str, source: str, frame: int, ts: int, payload: dict, producer: str) -> dict:
     return {
         "message_type": "event",
-        "message_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{schema}:{source}:{frame}")),
+        "message_id": str(uuid.uuid4()),
         "schema": schema,
         "schema_version": "1.0",
         "producer": producer,

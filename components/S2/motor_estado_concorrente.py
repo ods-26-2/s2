@@ -99,12 +99,20 @@ def _iso_de_ms(timestamp_ms: int) -> str:
 def _uuid_valido(valor: Any, campo: str) -> str:
     if not isinstance(valor, str):
         raise ValueError(f"Campo {campo!r} deve ser um UUID em string")
+
     try:
-        return str(uuid.UUID(valor))
+        identificador = uuid.UUID(valor)
     except (ValueError, AttributeError) as exc:
         raise ValueError(
             f"Campo {campo!r} não contém UUID válido: {valor!r}"
         ) from exc
+
+    if identificador.version != 4:
+        raise ValueError(
+            f"Campo {campo!r} deve ser UUID v4: {valor!r}"
+        )
+
+    return str(identificador)
 
 
 def _payload(mensagem: dict[str, Any]) -> dict[str, Any]:
