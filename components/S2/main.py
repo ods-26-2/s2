@@ -68,12 +68,28 @@ class CamadaS2:
             self.motor_estado.carregar_regras(artefato_regras)
 
 
-    def processar_eventos(
+    
+    def validar_mensagem_entrada(
+        self,
+        mensagem: Any,
+    ) -> dict[str, Any]:
+        """Valida uma mensagem sem modificar o estado do componente."""
+        return self.motor_estado.validar_mensagem_entrada(mensagem)
+
+    def processar_mensagens(
         self,
         fluxo_bruto: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """Processa mensagens de entrada conforme os contratos registrados."""
         return self.motor_estado.processar_mensagens(fluxo_bruto)
+
+    def processar_eventos(
+        self,
+        fluxo_bruto: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Alias compatível com a interface anterior."""
+        return self.processar_mensagens(fluxo_bruto)
+
 
 
 def _ler_json(caminho: Path) -> Any:
@@ -369,13 +385,10 @@ def executar(
     return 0
 
 
-def main() -> int:
-    """Configura os argumentos e inicia a execução do S2."""
 
+def main() -> int:
     parser = argparse.ArgumentParser(
-        description=(
-            "Executa o componente S2 da arquitetura ODS 6c."
-        )
+        description="Processa mensagens do componente S2."
     )
 
     parser.add_argument(
@@ -433,7 +446,30 @@ def main() -> int:
         ),
     )
 
+    parser.add_argument(
+        "--kafka",
+        action="store_true",
+        help="Executa o S2 consumindo e publicando mensagens via Kafka.",
+    )
+
     args = parser.parse_args()
+
+    if args.kafka:
+        if __package__:
+            from .kafka_adapter import executar_kafka
+        else:
+            from kafka_adapter import executar_kafka
+
+        artefato_regras, origem_regras = _ler_regras(args.rules)
+        artefato_ppe_catalog, origem_ppe_catalog = _ler_ppe_catalog(args.ppe_catalog)
+
+        camada_s2 = CamadaS2(
+            artefato_regras=artefato_regras,
+            artefato_ppe_catalog=artefato_ppe_catalog,
+        )
+
+        executar_kafka(camada_s2)
+        return 0
 
     entrada = args.input
 

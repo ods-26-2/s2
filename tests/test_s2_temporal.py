@@ -74,6 +74,32 @@ def rules(min_duration_ms=1000, min_confidence=0.5, uncertain_below=0.8, debounc
     }
 
 
+def rules_command(
+    message_id: str | None = None,
+    artifact_version: str = "rules-test-2",
+    ts: int = BASE,
+    rule_list: list | None = None,
+) -> dict:
+    configuracao = rules(min_duration_ms=0, debounce_ms=0)
+
+    return {
+        "message_type": "command",
+        "message_id": message_id or str(uuid.uuid4()),
+        "schema": "ods.s2.rules.command",
+        "schema_version": "1.0",
+        "producer": "A3",
+        "published_at": iso(ts),
+        "target": "S2",
+        "payload": {
+            "artifact_version": artifact_version,
+            "rules": (
+                configuracao["rules"]
+                if rule_list is None
+                else rule_list
+            ),
+        },
+    }
+
 class TestFiltroTemporal(unittest.TestCase):
     def test_persistencia_so_confirma_apos_tempo_minimo(self):
         filtro = FiltroRuidoTemporal()
@@ -89,6 +115,38 @@ class TestFiltroTemporal(unittest.TestCase):
 
 
 class TestMotorS2(unittest.TestCase):
+    def test_session_started_tem_prioridade_sobre_quadro_com_mesmo_timestamp(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        # Simula um vínculo antigo que precisa ser removido no início da sessão.
+        motor._track_to_entity[(SESSION, "cam0", "track-cam0")] = "entity-antiga"
+
+        inicio_sessao = {
+            "message_type": "event",
+            "message_id": str(uuid.uuid4()),
+            "schema": "ods.session.started",
+            "schema_version": "1.0",
+            "producer": "B1",
+            "published_at": iso(BASE),
+            "session_id": SESSION,
+            "sequence": 0,
+            "payload": {},
+        }
+
+        quadros = frame_messages(1, BASE, sources=("cam0",))
+
+        saida = motor.processar_mensagens([inicio_sessao] + quadros)
+
+        mensagem_entidade = next(
+            m for m in saida if m["schema"] == "ods.s2.entity"
+        )
+        ids_entidades = {
+            entidade["entity_id"]
+            for entidade in mensagem_entidade["payload"]["entities"]
+        }
+
+        self.assertNotIn("entity-antiga", ids_entidades)
+
     def test_persistencia_minima_e_emissao_started_updated(self):
         motor = MotorGerenciamentoEstadoConcorrente(ttl_threshold_ms=5000)
         motor.carregar_regras(rules(min_duration_ms=1000, debounce_ms=500))
@@ -99,6 +157,564 @@ class TestMotorS2(unittest.TestCase):
         self.assertEqual(eventos[0]["duration_ms"], 1000)
         self.assertEqual(eventos[0]["status"], "CONFIRMED")
 
+    def test_resetar_sessao_preserva_estado_das_demais_sessoes(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        outra_sessao = str(uuid.uuid4())
+
+        motor._track_to_entity[(SESSION, "cam0", "track-1")] = "entity-1"
+        motor._track_to_entity[(outra_sessao, "cam1", "track-2")] = "entity-2"
+
+        motor._sequence_por_sessao[SESSION] = 15
+        motor._sequence_por_sessao[outra_sessao] = 8
+
+        motor._resetar_estado_sessao(SESSION)
+
+        self.assertNotIn(
+            (SESSION, "cam0", "track-1"),
+            motor._track_to_entity,
+        )
+        self.assertEqual(
+            motor._track_to_entity[(outra_sessao, "cam1", "track-2")],
+            "entity-2",
+        )
+
+        self.assertEqual(motor._sequence_por_sessao[SESSION], 0)
+        self.assertEqual(motor._sequence_por_sessao[outra_sessao], 8)
+
+    def test_sequence_recomeca_em_zero_apos_session_started(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        motor._sequence_por_sessao[SESSION] = 15
+
+        inicio_sessao = {
+            "message_type": "event",
+            "message_id": str(uuid.uuid4()),
+            "schema": "ods.session.started",
+            "schema_version": "1.0",
+            "producer": "B1",
+            "published_at": iso(BASE),
+            "session_id": SESSION,
+            "sequence": 0,
+            "payload": {},
+        }
+
+        saida = motor.processar_mensagens(
+            [inicio_sessao] + frame_messages(1, BASE, sources=("cam0",))
+        )
+
+        mensagem_entidade = next(
+            m for m in saida if m["schema"] == "ods.s2.entity"
+        )
+
+        self.assertEqual(mensagem_entidade["sequence"], 0)
+
+    def test_remocao_de_regra_encerra_evento_ativo(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        motor.carregar_regras(rules(min_duration_ms=0, debounce_ms=0))
+
+        saida_inicial = motor.processar_mensagens(frame_messages(1, BASE))
+        eventos_iniciais = [
+            m for m in saida_inicial if m["schema"] == "ods.s2.event"
+        ]
+        self.assertEqual(eventos_iniciais[0]["payload"]["phase"], "STARTED")
+
+        eventos_encerrados = motor.carregar_regras({
+            "artifact_version": "rules-test-2",
+            "rules": [],
+        })
+
+        self.assertEqual(len(eventos_encerrados), 1)
+        self.assertEqual(eventos_encerrados[0]["payload"]["phase"], "ENDED")
+        self.assertEqual(
+            eventos_encerrados[0]["payload"]["event_id"],
+            eventos_iniciais[0]["payload"]["event_id"],
+        )
+        self.assertFalse(motor._condicoes)
+
+    def test_consolidacao_preserva_inicio_mais_antigo_da_persistencia(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        chave_a = (SESSION, "regra-1", "e-000001")
+        chave_b = (SESSION, "regra-1", "e-000002")
+
+        motor.filtro_temporal.inicio_condicao[chave_a] = BASE
+        motor.filtro_temporal.inicio_condicao[chave_b] = BASE + 500
+
+        motor._consolidar_ids_entidade({"e-000001", "e-000002"})
+
+        chave_consolidada = (SESSION, "regra-1", "e-000001")
+
+        self.assertEqual(
+            motor.filtro_temporal.inicio_condicao[chave_consolidada],
+            BASE,
+        )
+
+        persistiu, duracao = motor.filtro_temporal.atualizar_persistencia(
+            chave_consolidada,
+            True,
+            BASE + 1000,
+            1000,
+        )
+
+        self.assertTrue(persistiu)
+        self.assertEqual(duracao, 1000)
+
+    def test_consolidar_entidades_preserva_eventos_ativos_distintos(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        event_id_1 = str(uuid.uuid4())
+        event_id_2 = str(uuid.uuid4())
+
+        chave_1 = (SESSION, "cross-camera-test", "e-000001")
+        chave_2 = (SESSION, "cross-camera-test", "e-000002")
+
+        contexto_1 = {
+            "entity_id": "e-000001",
+            "source_ids": ["cam0", "cam1"],
+            "confidence": 0.9,
+        }
+        contexto_2 = {
+            "entity_id": "e-000002",
+            "source_ids": ["cam2", "cam3"],
+            "confidence": 0.8,
+        }
+
+        motor._condicoes[chave_1] = {
+            "first_seen_ms": BASE,
+            "last_seen_ms": BASE + 1000,
+            "last_emitted_ms": BASE + 1000,
+            "event_id": event_id_1,
+            "contexto": contexto_1,
+        }
+        motor._condicoes[chave_2] = {
+            "first_seen_ms": BASE + 500,
+            "last_seen_ms": BASE + 1000,
+            "last_emitted_ms": BASE + 1000,
+            "event_id": event_id_2,
+            "contexto": contexto_2,
+        }
+
+        canonico = motor._consolidar_ids_entidade(
+            {"e-000001", "e-000002"}
+        )
+
+        eventos_ativos = [
+            item["event_id"]
+            for chave, estado in motor._condicoes.items()
+            if chave[1] == "cross-camera-test"
+            for item in motor._estados_da_condicao(estado)
+            if item.get("event_id") is not None
+        ]
+
+        self.assertEqual(canonico, "e-000001")
+        self.assertCountEqual(
+            eventos_ativos,
+            [event_id_1, event_id_2],
+        )
+
+
+
+    def test_consolidacoes_sucessivas_preservam_todos_os_eventos(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        event_ids = [str(uuid.uuid4()) for _ in range(3)]
+
+        for i, event_id in enumerate(event_ids, start=1):
+            entity_id = f"e-{i:06d}"
+            chave = (SESSION, "cross-camera-test", entity_id)
+
+            motor._condicoes[chave] = {
+                "first_seen_ms": BASE + i * 100,
+                "last_seen_ms": BASE + 1000,
+                "last_emitted_ms": BASE + 1000,
+                "event_id": event_id,
+                "contexto": {"entity_id": entity_id},
+            }
+
+        motor._consolidar_ids_entidade(
+            {"e-000001", "e-000002"}
+        )
+        motor._consolidar_ids_entidade(
+            {"e-000001", "e-000003"}
+        )
+
+        eventos_ativos = [
+            item["event_id"]
+            for chave, estado in motor._condicoes.items()
+            if chave[1] == "cross-camera-test"
+            for item in motor._estados_da_condicao(estado)
+            if item.get("event_id") is not None
+        ]
+
+        self.assertCountEqual(eventos_ativos, event_ids)
+        self.assertEqual(len(motor._condicoes), 1)
+
+
+    def test_consolidacao_atualiza_todos_os_eventos_ativos(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        regra = rules(min_duration_ms=0, debounce_ms=500)["rules"][0]
+
+        event_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+
+        for i, event_id in enumerate(event_ids, start=1):
+            entity_id = f"e-{i:06d}"
+            chave = (SESSION, regra["rule_id"], entity_id)
+
+            motor._condicoes[chave] = {
+                "first_seen_ms": BASE,
+                "last_seen_ms": BASE + 1000,
+                "last_emitted_ms": BASE + 1000,
+                "event_id": event_id,
+                "contexto": {"entity_id": entity_id},
+            }
+
+        motor._consolidar_ids_entidade(
+            {"e-000001", "e-000002"}
+        )
+
+        eventos = motor._atualizar_condicao(
+            regra,
+            ("e-000001",),
+            True,
+            BASE + 2000,
+            {"confidence": 0.95},
+            SESSION,
+        )
+
+        self.assertEqual(len(eventos), 2)
+        self.assertEqual(
+            {evento["payload"]["phase"] for evento in eventos},
+            {"UPDATED"},
+        )
+        self.assertCountEqual(
+            [
+                evento["payload"]["event_id"]
+                for evento in eventos
+            ],
+            event_ids,
+        )
+
+    def test_ttl_encerra_individualmente_eventos_apos_consolidacao(self):
+        motor = MotorGerenciamentoEstadoConcorrente(ttl_threshold_ms=5000)
+        regra = rules(min_duration_ms=0, debounce_ms=0)["rules"][0]
+        motor.carregar_regras(rules(min_duration_ms=0, debounce_ms=0))
+
+        event_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+
+        for i, event_id in enumerate(event_ids, start=1):
+            entity_id = f"e-{i:06d}"
+            chave = (SESSION, regra["rule_id"], entity_id)
+
+            motor._condicoes[chave] = {
+                "first_seen_ms": BASE,
+                "last_seen_ms": BASE if i == 1 else BASE + 8000,
+                "last_emitted_ms": BASE,
+                "event_id": event_id,
+                "contexto": {"entity_id": entity_id},
+            }
+
+        motor._consolidar_ids_entidade(
+            {"e-000001", "e-000002"}
+        )
+
+        saida = []
+        motor._encerrar_condicoes_de_entidades_ausentes(
+            [],
+            BASE + 10000,
+            SESSION,
+            saida,
+        )
+
+        self.assertEqual(len(saida), 1)
+        self.assertEqual(saida[0]["payload"]["phase"], "ENDED")
+        self.assertEqual(saida[0]["payload"]["event_id"], event_ids[0])
+
+        estados_restantes = [
+            item
+            for estado in motor._condicoes.values()
+            for item in motor._estados_da_condicao(estado)
+        ]
+
+        self.assertEqual(len(estados_restantes), 1)
+        self.assertEqual(estados_restantes[0]["event_id"], event_ids[1])
+
+    def test_consolidacao_preserva_eventos_ao_remover_regra(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        regra = rules(min_duration_ms=0, debounce_ms=0)["rules"][0]
+        motor.regras = [regra]
+
+        event_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+
+        for i, event_id in enumerate(event_ids):
+            chave = (SESSION, regra["rule_id"], f"e-{i + 1:06d}")
+            motor._condicoes[chave] = {
+                "first_seen_ms": BASE + i * 100,
+                "last_seen_ms": BASE + 1000,
+                "last_emitted_ms": BASE + 1000,
+                "event_id": event_id,
+                "contexto": {"entity_id": f"e-{i + 1:06d}"},
+            }
+
+        motor._consolidar_ids_entidade({"e-000001", "e-000002"})
+
+        eventos_encerrados = motor.carregar_regras({
+            "artifact_version": "rules-test-2",
+            "rules": [],
+        })
+
+        self.assertEqual(len(eventos_encerrados), 2)
+        self.assertEqual(
+            {evento["payload"]["phase"] for evento in eventos_encerrados},
+            {"ENDED"},
+        )
+        self.assertCountEqual(
+            [
+                evento["payload"]["event_id"]
+                for evento in eventos_encerrados
+            ],
+            event_ids,
+        )
+        self.assertFalse(motor._condicoes)
+
+
+    def test_comando_regras_valido_gera_reply(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        comando = rules_command()
+
+        saida = motor.processar_mensagens([comando])
+        replies = [
+            m for m in saida
+            if m["schema"] == "ods.s2.rules.reply"
+        ]
+
+        self.assertEqual(len(replies), 1)
+
+        reply = replies[0]
+        self.assertEqual(reply["message_type"], "reply")
+        self.assertEqual(
+            reply["correlation_id"],
+            comando["message_id"],
+        )
+        self.assertEqual(reply["payload"]["status"], "OK")
+        self.assertEqual(
+            reply["payload"]["applied_rule_ids"],
+            ["cross-camera-test"],
+        )
+        self.assertNotIn("session_id", reply)
+        self.assertNotIn("sequence", reply)
+        self.assertNotIn("captured_at", reply)
+
+    def test_comando_repetido_reutiliza_reply_original(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        comando = rules_command()
+
+        primeira_saida = motor.processar_mensagens([comando])
+        primeira_reply = next(
+            m for m in primeira_saida
+            if m["schema"] == "ods.s2.rules.reply"
+        )
+
+        segunda_saida = motor.processar_mensagens([comando])
+        segunda_reply = next(
+            m for m in segunda_saida
+            if m["schema"] == "ods.s2.rules.reply"
+        )
+
+        self.assertEqual(segunda_reply, primeira_reply)
+        self.assertEqual(
+            motor.artifact_version_regras,
+            "rules-test-2",
+        )
+
+    def test_comando_duplicado_no_mesmo_lote_responde_duas_vezes(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        comando = rules_command()
+
+        saida = motor.processar_mensagens([
+            comando,
+            dict(comando),
+        ])
+
+        replies = [
+            m for m in saida
+            if m["schema"] == "ods.s2.rules.reply"
+        ]
+
+        self.assertEqual(len(replies), 2)
+        self.assertEqual(replies[0], replies[1])
+
+    def test_comando_antigo_repetido_nao_reaplica_regras(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        comando_antigo = rules_command(
+            artifact_version="rules-test-2",
+            ts=BASE,
+        )
+        comando_novo = rules_command(
+            artifact_version="rules-test-3",
+            ts=BASE + 1000,
+        )
+
+        motor.processar_mensagens([comando_antigo])
+        motor.processar_mensagens([comando_novo])
+
+        saida_repeticao = motor.processar_mensagens([
+            comando_antigo
+        ])
+
+        replies = [
+            m for m in saida_repeticao
+            if m["schema"] == "ods.s2.rules.reply"
+        ]
+
+        self.assertEqual(len(replies), 1)
+        self.assertEqual(
+            replies[0]["correlation_id"],
+            comando_antigo["message_id"],
+        )
+        self.assertEqual(
+            motor.artifact_version_regras,
+            "rules-test-3",
+        )
+
+    def test_comando_com_event_type_desconhecido_retorna_erro(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        comando = rules_command(
+            rule_list=[{
+                "rule_id": "regra-invalida",
+                "event_type": "EVENTO_INEXISTENTE",
+                "min_confidence": 0.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }]
+        )
+
+        saida = motor.processar_mensagens([comando])
+
+        reply = next(
+            m for m in saida
+            if m["schema"] == "ods.s2.rules.reply"
+        )
+
+        self.assertEqual(reply["payload"]["status"], "ERROR")
+        self.assertEqual(
+            reply["payload"]["error"]["code"],
+            "UNKNOWN_EVENT_TYPE",
+        )
+        self.assertIn(
+            "EVENTO_INEXISTENTE",
+            reply["payload"]["error"]["message"],
+        )
+        self.assertEqual(
+            reply["correlation_id"],
+            comando["message_id"],
+        )
+        self.assertNotIn("code", reply["payload"])
+        self.assertNotIn("message", reply["payload"])
+
+    def test_comando_com_regra_invalida_preserva_regras_anteriores(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        comando_valido = rules_command(
+            artifact_version="rules-validas"
+        )
+        motor.processar_mensagens([comando_valido])
+
+        regras_anteriores = [dict(r) for r in motor.regras]
+
+        comando_invalido = rules_command(
+            artifact_version="rules-invalidas",
+            rule_list=[{
+                "rule_id": "regra-invalida",
+                "event_type": "CROSS_CAMERA_MATCH",
+                "min_confidence": 1.5,
+                "uncertain_below": 0.8,
+                "min_duration_ms": 0,
+                "debounce_ms": 0,
+            }]
+        )
+
+        saida = motor.processar_mensagens([comando_invalido])
+
+        reply = next(
+            m for m in saida
+            if m["schema"] == "ods.s2.rules.reply"
+        )
+
+        self.assertEqual(reply["payload"]["status"], "ERROR")
+        self.assertEqual(
+            reply["payload"]["error"]["code"],
+            "INVALID_RULE",
+        )
+        self.assertEqual(
+            reply["correlation_id"],
+            comando_invalido["message_id"],
+        )
+        self.assertEqual(motor.artifact_version_regras, "rules-validas")
+        self.assertEqual(motor.regras, regras_anteriores)
+
+    def test_modificacao_de_regra_encerra_evento_ativo(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        motor.carregar_regras(rules(min_duration_ms=0, debounce_ms=0))
+
+        saida_inicial = motor.processar_mensagens(frame_messages(1, BASE))
+        evento_inicial = next(
+            m for m in saida_inicial if m["schema"] == "ods.s2.event"
+        )
+
+        novas_regras = rules(min_duration_ms=0, debounce_ms=0)
+        novas_regras["artifact_version"] = "rules-test-2"
+        novas_regras["rules"][0]["min_confidence"] = 0.7
+
+        eventos_encerrados = motor.carregar_regras(novas_regras)
+
+        self.assertEqual(len(eventos_encerrados), 1)
+        self.assertEqual(eventos_encerrados[0]["payload"]["phase"], "ENDED")
+        self.assertEqual(
+            eventos_encerrados[0]["payload"]["event_id"],
+            evento_inicial["payload"]["event_id"],
+        )
+        self.assertEqual(
+            eventos_encerrados[0]["artifact_version"],
+            "rules-test-1",
+        )
+
+    def test_regra_inalterada_preserva_evento_ativo(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        configuracao = rules(min_duration_ms=0, debounce_ms=0)
+        motor.carregar_regras(configuracao)
+        motor.processar_mensagens(frame_messages(1, BASE))
+
+        eventos_encerrados = motor.carregar_regras({
+            "artifact_version": "rules-test-2",
+            "rules": [dict(configuracao["rules"][0])],
+        })
+
+        self.assertEqual(eventos_encerrados, [])
+        self.assertTrue(motor._condicoes)
+        self.assertEqual(motor.artifact_version_regras, "rules-test-2")
+
+    def test_artefato_invalido_preserva_regras_e_condicoes_ativas(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        configuracao = rules(min_duration_ms=0, debounce_ms=0)
+        motor.carregar_regras(configuracao)
+        motor.processar_mensagens(frame_messages(1, BASE))
+
+        regras_anteriores = [dict(regra) for regra in motor.regras]
+        condicoes_anteriores = dict(motor._condicoes)
+
+        with self.assertRaises(ValueError):
+            motor.carregar_regras({
+                "artifact_version": "rules-invalid",
+                "rules": "isso-nao-e-uma-lista",
+            })
+
+        self.assertEqual(motor.regras, regras_anteriores)
+        self.assertEqual(motor._condicoes, condicoes_anteriores)
+        self.assertEqual(motor.artifact_version_regras, "rules-test-1")
+
     def test_confianca_intermediaria_publica_uncertain(self):
         motor = MotorGerenciamentoEstadoConcorrente()
         motor.carregar_regras(rules(min_duration_ms=0))
@@ -107,6 +723,51 @@ class TestMotorS2(unittest.TestCase):
         eventos = [m["payload"] for m in saida if m["schema"] == "ods.s2.event"]
         self.assertTrue(eventos)
         self.assertEqual(eventos[0]["status"], "UNCERTAIN")
+
+
+    def test_queda_de_confianca_encerra_evento_cross_camera_ativo(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        motor.carregar_regras(
+            rules(
+                min_duration_ms=0,
+                min_confidence=0.5,
+                debounce_ms=0,
+            )
+        )
+
+        saida_inicial = motor.processar_mensagens(
+            frame_messages(1, BASE, confidence=0.9)
+        )
+        eventos_iniciais = [
+            m for m in saida_inicial
+            if m["schema"] == "ods.s2.event"
+        ]
+
+        self.assertEqual(
+            [m["payload"]["phase"] for m in eventos_iniciais],
+            ["STARTED"],
+        )
+
+        event_id = eventos_iniciais[0]["payload"]["event_id"]
+
+        saida_baixa = motor.processar_mensagens(
+            frame_messages(2, BASE + 1000, confidence=0.4)
+        )
+        eventos_baixa = [
+            m for m in saida_baixa
+            if m["schema"] == "ods.s2.event"
+        ]
+
+        self.assertEqual(
+            [m["payload"]["phase"] for m in eventos_baixa],
+            ["ENDED"],
+        )
+        self.assertEqual(
+            eventos_baixa[0]["payload"]["event_id"],
+            event_id,
+        )
+        self.assertFalse(motor._condicoes)
+
 
     def test_confianca_abaixo_do_minimo_e_ignorada(self):
         motor = MotorGerenciamentoEstadoConcorrente()

@@ -4,6 +4,8 @@ RULES e PPE_CATALOG são artefatos versionados da aplicação.
 Os parâmetros técnicos de fusão ficam separados desses artefatos.
 """
 
+import os
+import os
 from pathlib import Path
 
 
@@ -87,3 +89,69 @@ ESCALA_PIXEL_PARA_METRO_MOCK = 0.01
 DESLOCAMENTO_CAM2_X_MOCK = 0.10
 
 DESLOCAMENTO_CAM2_Y_MOCK = 0.05
+
+# Configurações de integração Kafka.
+# Os valores podem ser sobrescritos por variáveis de ambiente.
+
+
+
+KAFKA_BOOTSTRAP_SERVERS = os.getenv(
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "34.66.235.91:9093",
+)
+
+KAFKA_GROUP_ID = os.getenv(
+    "KAFKA_GROUP_ID",
+    "ods-s2-consumer",
+)
+
+KAFKA_AUTO_OFFSET_RESET = os.getenv(
+    "KAFKA_AUTO_OFFSET_RESET",
+    "earliest",
+)
+
+KAFKA_ENABLE_AUTO_COMMIT = False
+
+KAFKA_POLL_TIMEOUT_SECONDS = float(
+    os.getenv("KAFKA_POLL_TIMEOUT_SECONDS", "1.0")
+)
+
+KAFKA_BATCH_MAX_MESSAGES = int(
+    os.getenv("KAFKA_BATCH_MAX_MESSAGES", "100")
+)
+
+KAFKA_FRAME_WAIT_MS = int(
+    os.getenv("KAFKA_FRAME_WAIT_MS", "200")
+)
+
+KAFKA_INPUT_TOPICS = [
+    topic.strip()
+    for topic in os.getenv(
+        "KAFKA_INPUT_TOPICS",
+        (
+            "ods.i2.tracks,"
+            "ods.i9.ppe_compliance,"
+            "ods.s1.position,"
+            "ods.s1.zone_transition,"
+            "ods.s1.zone_occupancy,"
+            "ods.session.started,"
+            "ods.s2.rules.command"
+        ),
+    ).split(",")
+    if topic.strip()
+]
+
+KAFKA_OUTPUT_TOPICS = {
+    "ods.s2.entity": os.getenv(
+        "KAFKA_TOPIC_S2_ENTITY",
+        "ods.s2.entity",
+    ),
+    "ods.s2.event": os.getenv(
+        "KAFKA_TOPIC_S2_EVENT",
+        "ods.s2.event",
+    ),
+    "ods.s2.rules.reply": os.getenv(
+        "KAFKA_TOPIC_S2_RULES_REPLY",
+        "ods.s2.rules.reply",
+    ),
+}

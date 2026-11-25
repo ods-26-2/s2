@@ -219,6 +219,7 @@ class MotorGerenciamentoEstadoConcorrente:
 
         self._sequence_por_sessao: dict[str, int] = defaultdict(int)
         self._processadas: set[str] = set()
+        self._respostas_comandos_regras: dict[str, dict[str, Any]] = {}
 
         self._ultima_observacao_entidade: dict[tuple[str, str], int] = {}
 
@@ -237,12 +238,78 @@ class MotorGerenciamentoEstadoConcorrente:
     # Regras
     # ------------------------------------------------------------------
 
-    def carregar_regras(self, artefato_regras: dict[str, Any] | None) -> None:
+
+    def _encerrar_condicoes_de_regras_substituidas(
+        self,
+        novas_regras: list[dict[str, Any]],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
+        """Encerra eventos de regras removidas ou modificadas."""
+        regras_novas_por_id = {
+            regra["rule_id"]: regra
+            for regra in novas_regras
+        }
+
+        regras_antigas_por_id = {
+            regra["rule_id"]: regra
+            for regra in self.regras
+        }
+
+        regras_afetadas = {
+            rule_id
+            for rule_id, regra_antiga in regras_antigas_por_id.items()
+            if regras_novas_por_id.get(rule_id) != regra_antiga
+        }
+
+        if not regras_afetadas:
+            return []
+
+        saida: list[dict[str, Any]] = []
+
+        for chave, estado in list(self._condicoes.items()):
+            if len(chave) < 2:
+                continue
+
+            session_id, rule_id = chave[0], chave[1]
+
+            if rule_id not in regras_afetadas:
+                continue
+
+            regra_antiga = regras_antigas_por_id[rule_id]
+
+            for item in self._estados_da_condicao(estado):
+                if item.get("event_id"):
+                    saida.append(
+                        self._emitir_evento(
+                            regra_antiga,
+                            item,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            item.get("contexto", {}),
+                        )
+                    )
+
+            self._condicoes.pop(chave, None)
+            self.filtro_temporal.ultimo_visto.pop(chave, None)
+            self.filtro_temporal.inicio_condicao.pop(chave, None)
+
+        return saida
+
+
+    def carregar_regras(
+        self,
+        artefato_regras: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
         """Carrega o payload do artefato RULES."""
         if artefato_regras is None:
+            eventos_encerrados = self._encerrar_condicoes_de_regras_substituidas(
+                [],
+                FiltroRuidoTemporal.timestamp_em_ms(_agora_iso()),
+            )
             self.artifact_version_regras = None
             self.regras = []
-            return
+            return eventos_encerrados
 
         if not isinstance(artefato_regras, dict):
             raise ValueError("O artefato RULES deve ser um objeto JSON")
@@ -350,8 +417,17 @@ class MotorGerenciamentoEstadoConcorrente:
 
             validadas.append(regra)
 
+        timestamp_ms = FiltroRuidoTemporal.timestamp_em_ms(_agora_iso())
+
+        eventos_encerrados = self._encerrar_condicoes_de_regras_substituidas(
+            validadas,
+            timestamp_ms,
+        )
+
         self.artifact_version_regras = versao
         self.regras = validadas
+
+        return eventos_encerrados
 
 
     def carregar_ppe_catalog(
@@ -623,6 +699,57 @@ class MotorGerenciamentoEstadoConcorrente:
         _payload(mensagem)
         return mensagem
 
+
+    @staticmethod
+    def validar_mensagem_entrada(mensagem: Any) -> dict[str, Any]:
+        """Valida uma mensagem de entrada sem modificar o estado do motor."""
+        if (
+            isinstance(mensagem, dict)
+            and mensagem.get("schema") == "ods.s2.rules.command"
+        ):
+            return MotorGerenciamentoEstadoConcorrente._validar_comando_regras(
+                mensagem,
+                0,
+            )
+
+        mensagem_validada = (
+            MotorGerenciamentoEstadoConcorrente._validar_mensagem(
+                mensagem,
+                0,
+            )
+        )
+
+        schema = mensagem_validada["schema"]
+
+        if schema not in SCHEMAS_CONSUMIDOS:
+            raise ValueError(
+                f"S2 não consome o schema {schema!r}; "
+                "confira o mapa de produção/consumo da arquitetura 6c"
+            )
+
+        if schema in SCHEMAS_POR_QUADRO:
+            payload = _payload(mensagem_validada)
+            frame_index = payload.get("frame_index")
+
+            if (
+                not isinstance(frame_index, int)
+                or isinstance(frame_index, bool)
+                or frame_index < 0
+            ):
+                raise ValueError(
+                    f"{schema} exige payload.frame_index integer >= 0"
+                )
+
+            source_id = mensagem_validada.get("source_id")
+
+            if not isinstance(source_id, str) or not source_id.strip():
+                raise ValueError(
+                    f"{schema} exige source_id string não vazia"
+                )
+
+        return mensagem_validada
+
+
     # ------------------------------------------------------------------
     # Entrada principal, deduplicação e timeline
     # ------------------------------------------------------------------
@@ -634,6 +761,8 @@ class MotorGerenciamentoEstadoConcorrente:
         """Processa mensagens de entrada e retorna ods.s2.entity/event."""
         mensagens: list[dict[str, Any]] = []
         comandos_regras: list[dict[str, Any]] = []
+        comandos_repetidos: list[dict[str, Any]] = []
+        comandos_repetidos_pendentes: dict[str, int] = defaultdict(int)
 
         for indice, bruto in enumerate(eventos_validos):
             if (
@@ -641,9 +770,21 @@ class MotorGerenciamentoEstadoConcorrente:
                 and bruto.get("schema") == "ods.s2.rules.command"
             ):
                 comando = self._validar_comando_regras(bruto, indice)
-                if comando["message_id"] in self._processadas:
+                message_id = comando["message_id"]
+
+                if message_id in self._processadas:
+                    resposta_anterior = self._respostas_comandos_regras.get(
+                        message_id
+                    )
+
+                    if resposta_anterior is not None:
+                        comandos_repetidos.append(resposta_anterior)
+                    else:
+                        comandos_repetidos_pendentes[message_id] += 1
+
                     continue
-                self._processadas.add(comando["message_id"])
+
+                self._processadas.add(message_id)
                 comandos_regras.append(comando)
                 continue
 
@@ -734,7 +875,14 @@ class MotorGerenciamentoEstadoConcorrente:
                     mensagem["published_at"]
                 )
             )
-            timeline.append((timestamp, 1, mensagem))
+
+            prioridade = (
+                -2
+                if mensagem["schema"] == "ods.session.started"
+                else 1
+            )
+
+            timeline.append((timestamp, prioridade, mensagem))
 
         for comando in comandos_regras:
             timestamp = FiltroRuidoTemporal.timestamp_em_ms(
@@ -748,7 +896,23 @@ class MotorGerenciamentoEstadoConcorrente:
 
         for timestamp_ms, tipo, item in timeline:
             if tipo == -1:
-                saida.append(self._processar_comando_regras(item))
+                resultado_comando = self._processar_comando_regras(item)
+
+                saida.extend(resultado_comando["eventos_encerrados"])
+
+                reply = resultado_comando["reply"]
+                message_id = item["message_id"]
+
+                self._respostas_comandos_regras[message_id] = reply
+                saida.append(reply)
+
+                repeticoes = comandos_repetidos_pendentes.pop(
+                    message_id,
+                    0,
+                )
+
+                for _ in range(repeticoes):
+                    saida.append(reply)
 
             elif tipo == 0:
                 mensagem_entidade, entidades, observacoes = (
@@ -785,6 +949,8 @@ class MotorGerenciamentoEstadoConcorrente:
                     saida.extend(
                         self._processar_ocupacao(item, timestamp_ms)
                     )
+
+        saida.extend(comandos_repetidos)
 
         return saida
 
@@ -867,9 +1033,11 @@ class MotorGerenciamentoEstadoConcorrente:
     ) -> dict[str, Any]:
         """Aplica o artefato RULES e devolve uma reply."""
         payload = comando["payload"]
+        eventos_encerrados: list[dict[str, Any]] = []
+
 
         try:
-            self.carregar_regras(
+            eventos_encerrados = self.carregar_regras(
                 {
                     "artifact_version": payload["artifact_version"],
                     "rules": payload["rules"],
@@ -879,28 +1047,37 @@ class MotorGerenciamentoEstadoConcorrente:
                 "status": "OK",
                 "applied_rule_ids": [r["rule_id"] for r in self.regras],
             }
+
         except ValueError as exc:
             texto = str(exc)
-            codigo = (
-                "UNKNOWN_EVENT_TYPE"
-                if "UNKNOWN_EVENT_TYPE" in texto
-                else "INVALID_RULE"
-            )
+
+            if "UNKNOWN_EVENT_TYPE" in texto:
+                codigo = "UNKNOWN_EVENT_TYPE"
+            elif "UNKNOWN_ZONE" in texto:
+                codigo = "UNKNOWN_ZONE"
+            else:
+                codigo = "INVALID_RULE"
+
             resposta = {
                 "status": "ERROR",
-                "code": codigo,
-                "message": texto,
+                "error": {
+                    "code": codigo,
+                    "message": texto,
+                },
             }
 
         return {
-            "message_type": "reply",
-            "message_id": str(uuid.uuid4()),
-            "schema": "ods.s2.rules.reply",
-            "schema_version": SCHEMA_VERSION,
-            "producer": "S2",
-            "published_at": _agora_iso(),
-            "correlation_id": comando["message_id"],
-            "payload": resposta,
+            "eventos_encerrados": eventos_encerrados,
+            "reply": {
+                "message_type": "reply",
+                "message_id": str(uuid.uuid4()),
+                "schema": "ods.s2.rules.reply",
+                "schema_version": SCHEMA_VERSION,
+                "producer": "S2",
+                "published_at": _agora_iso(),
+                "correlation_id": comando["message_id"],
+                "payload": resposta,
+            },
         }
 
     def processar_mensagens(
@@ -1409,6 +1586,74 @@ class MotorGerenciamentoEstadoConcorrente:
     # Fusão e reidentificação
     # ------------------------------------------------------------------
 
+
+    @staticmethod
+    def _estados_da_condicao(
+        estado: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Retorna o estado principal e os eventos adicionais associados."""
+        adicionais = estado.get("_eventos_adicionais", [])
+        return [estado, *adicionais]
+
+    def _mesclar_estados_condicao(
+        self,
+        estado_a: dict[str, Any],
+        estado_b: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Preserva eventos ativos quando duas condições passam a colidir."""
+        candidatos: list[dict[str, Any]] = []
+        vistos: set[int] = set()
+
+        for estado in (estado_a, estado_b):
+            for candidato in self._estados_da_condicao(estado):
+                identidade = id(candidato)
+
+                if identidade in vistos:
+                    continue
+
+                vistos.add(identidade)
+                candidato.pop("_eventos_adicionais", None)
+                candidatos.append(candidato)
+
+        ativos = [
+            estado
+            for estado in candidatos
+            if estado.get("event_id") is not None
+        ]
+
+        if ativos:
+            ativos.sort(
+                key=lambda estado: estado.get("first_seen_ms", 0)
+            )
+            principal = ativos[0]
+            principal["_eventos_adicionais"] = ativos[1:]
+            return principal
+
+        principal = min(
+            candidatos,
+            key=lambda estado: estado.get("first_seen_ms", 0),
+        )
+
+        principal["first_seen_ms"] = min(
+            estado.get("first_seen_ms", principal["first_seen_ms"])
+            for estado in candidatos
+        )
+
+        principal["last_seen_ms"] = max(
+            estado.get("last_seen_ms", principal["last_seen_ms"])
+            for estado in candidatos
+        )
+
+        mais_recente = max(
+            candidatos,
+            key=lambda estado: estado.get("last_seen_ms", 0),
+        )
+        principal["contexto"] = dict(mais_recente.get("contexto", {}))
+
+        return principal
+
+
+    
     def _consolidar_ids_entidade(
         self,
         ids: set[str],
@@ -1431,7 +1676,6 @@ class MotorGerenciamentoEstadoConcorrente:
                 if valor == antigo:
                     self._track_to_entity[chave] = canonico
 
-            # Migra condições ativas sem alterar seus event_id.
             for chave, estado in list(self._condicoes.items()):
                 if antigo not in chave[2:]:
                     continue
@@ -1442,14 +1686,43 @@ class MotorGerenciamentoEstadoConcorrente:
                 )
 
                 existente = self._condicoes.get(nova_chave)
-                if existente is None or (
-                    existente.get("event_id") is None
-                    and estado.get("event_id") is not None
-                ):
+
+                if existente is None:
                     self._condicoes[nova_chave] = estado
+                else:
+                    self._condicoes[nova_chave] = (
+                        self._mesclar_estados_condicao(
+                            existente,
+                            estado,
+                        )
+                    )
 
                 if nova_chave != chave:
                     self._condicoes.pop(chave, None)
+
+                # Migra persistência e debounce para a chave canônica.
+                for mapa, combinar in (
+                    (
+                        self.filtro_temporal.inicio_condicao,
+                        min,
+                    ),
+                    (
+                        self.filtro_temporal.ultimo_visto,
+                        max,
+                    ),
+                ):
+                    if chave not in mapa:
+                        continue
+
+                    instante = mapa.pop(chave)
+
+                    if nova_chave in mapa:
+                        mapa[nova_chave] = combinar(
+                            mapa[nova_chave],
+                            instante,
+                        )
+                    else:
+                        mapa[nova_chave] = instante
 
             for chave, timestamp in list(
                 self._ultima_observacao_entidade.items()
@@ -2079,16 +2352,17 @@ class MotorGerenciamentoEstadoConcorrente:
                     )
                     estado_match = self._condicoes.get(chave_condicao)
 
-                    dentro_ttl = bool(
-                        estado_match
-                        and timestamp_ms
-                        - int(
-                            estado_match.get(
-                                "last_seen_ms",
-                                timestamp_ms,
-                            )
-                        )
-                        <= self.ttl_threshold_ms
+                    estados_match = (
+                        self._estados_da_condicao(estado_match)
+                        if estado_match is not None
+                        else []
+                    )
+
+                    dentro_ttl = any(
+                        timestamp_ms - int(
+                            item.get("last_seen_ms", timestamp_ms)
+                        ) <= self.ttl_threshold_ms
+                        for item in estados_match
                     )
 
                     if condicao or not dentro_ttl:
@@ -2116,6 +2390,8 @@ class MotorGerenciamentoEstadoConcorrente:
     # Persistência, debounce e emissão de eventos
     # ------------------------------------------------------------------
 
+    
+    
     def _atualizar_condicao(
         self,
         regra: dict[str, Any],
@@ -2130,36 +2406,58 @@ class MotorGerenciamentoEstadoConcorrente:
         chave = (session_id, rule_id, *identidade)
         saida: list[dict[str, Any]] = []
 
-        if not ativa:
-            estado = self._condicoes.get(chave)
+        estado = self._condicoes.get(chave)
+        estados = (
+            self._estados_da_condicao(estado)
+            if estado is not None
+            else []
+        )
 
-            if estado and estado.get("event_id"):
-                saida.append(
-                    self._emitir_evento(
-                        regra,
-                        estado,
-                        "ENDED",
-                        timestamp_ms,
-                        session_id,
-                        contexto,
+        if not ativa:
+            for item in estados:
+                if item.get("event_id"):
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            item,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            item.get("contexto", contexto),
+                        )
                     )
-                )
 
             self._condicoes.pop(chave, None)
             self.filtro_temporal.atualizar_persistencia(
-                chave,
-                False,
-                timestamp_ms,
-                0,
+                chave, False, timestamp_ms, 0
             )
+            self.filtro_temporal.ultimo_visto.pop(chave, None)
             return saida
 
         confidence = float(contexto.get("confidence", 1.0))
 
         if confidence < float(regra["min_confidence"]):
-            return saida
+            if regra.get("event_type") == "CROSS_CAMERA_MATCH":
+                for item in estados:
+                    if item.get("event_id"):
+                        saida.append(
+                            self._emitir_evento(
+                                regra,
+                                item,
+                                "ENDED",
+                                timestamp_ms,
+                                session_id,
+                                item.get("contexto", contexto),
+                            )
+                        )
 
-        estado = self._condicoes.get(chave)
+                self._condicoes.pop(chave, None)
+                self.filtro_temporal.atualizar_persistencia(
+                    chave, False, timestamp_ms, 0
+                )
+                self.filtro_temporal.ultimo_visto.pop(chave, None)
+
+            return saida
 
         if estado is None:
             estado = {
@@ -2170,9 +2468,11 @@ class MotorGerenciamentoEstadoConcorrente:
                 "contexto": dict(contexto),
             }
             self._condicoes[chave] = estado
+            estados = [estado]
         else:
-            estado["last_seen_ms"] = timestamp_ms
-            estado["contexto"] = dict(contexto)
+            for item in estados:
+                item["last_seen_ms"] = timestamp_ms
+                item["contexto"] = dict(contexto)
 
         min_duration = int(
             regra["min_duration_ms"]
@@ -2187,7 +2487,11 @@ class MotorGerenciamentoEstadoConcorrente:
             min_duration,
         )
 
-        if not estado.get("event_id") and persistiu:
+        eventos_ativos = [
+            item for item in estados if item.get("event_id")
+        ]
+
+        if not eventos_ativos and persistiu:
             if self.filtro_temporal.aplicar_debounce(
                 chave,
                 timestamp_ms,
@@ -2206,31 +2510,30 @@ class MotorGerenciamentoEstadoConcorrente:
                         contexto,
                     )
                 )
-
-        elif estado.get("event_id"):
+        else:
             debounce_ms = int(regra["debounce_ms"])
 
-            if (
-                estado["last_emitted_ms"] is None
-                or timestamp_ms - estado["last_emitted_ms"] >= debounce_ms
-            ):
-                if self.filtro_temporal.aplicar_debounce(
-                    chave,
-                    timestamp_ms,
-                    debounce_ms,
-                ):
-                    estado["last_emitted_ms"] = timestamp_ms
+            for item in eventos_ativos:
+                ultimo = item.get("last_emitted_ms")
 
-                    saida.append(
-                        self._emitir_evento(
-                            regra,
-                            estado,
-                            "UPDATED",
-                            timestamp_ms,
-                            session_id,
-                            contexto,
-                        )
+                if ultimo is not None and (
+                    timestamp_ms < ultimo
+                    or timestamp_ms - ultimo < debounce_ms
+                ):
+                    continue
+
+                item["last_emitted_ms"] = timestamp_ms
+
+                saida.append(
+                    self._emitir_evento(
+                        regra,
+                        item,
+                        "UPDATED",
+                        timestamp_ms,
+                        session_id,
+                        item.get("contexto", contexto),
                     )
+                )
 
         return saida
 
@@ -2443,17 +2746,19 @@ class MotorGerenciamentoEstadoConcorrente:
                 )
                 estado = self._condicoes.get(chave_condicao)
 
-                if estado and estado.get("event_id"):
-                    saida.append(
-                        self._emitir_evento(
-                            regra,
-                            estado,
-                            "ENDED",
-                            timestamp_ms,
-                            session_id,
-                            contexto,
-                        )
-                    )
+                if estado:
+                    for item in self._estados_da_condicao(estado):
+                        if item.get("event_id"):
+                            saida.append(
+                                self._emitir_evento(
+                                    regra,
+                                    item,
+                                    "ENDED",
+                                    timestamp_ms,
+                                    session_id,
+                                    item.get("contexto", contexto),
+                                )
+                            )
 
                 self._condicoes.pop(chave_condicao, None)
                 self.filtro_temporal.atualizar_persistencia(
@@ -2592,17 +2897,19 @@ class MotorGerenciamentoEstadoConcorrente:
                 )
                 estado = self._condicoes.get(chave_condicao)
 
-                if estado and estado.get("event_id"):
-                    saida.append(
-                        self._emitir_evento(
-                            regra,
-                            estado,
-                            "ENDED",
-                            timestamp_ms,
-                            session_id,
-                            contexto,
-                        )
-                    )
+                if estado:
+                    for item in self._estados_da_condicao(estado):
+                        if item.get("event_id"):
+                            saida.append(
+                                self._emitir_evento(
+                                    regra,
+                                    item,
+                                    "ENDED",
+                                    timestamp_ms,
+                                    session_id,
+                                    item.get("contexto", contexto),
+                                )
+                            )
 
                 self._condicoes.pop(chave_condicao, None)
                 self.filtro_temporal.atualizar_persistencia(
@@ -2618,6 +2925,7 @@ class MotorGerenciamentoEstadoConcorrente:
     # Encerramento por ausência e expiração
     # ------------------------------------------------------------------
 
+    
     def _encerrar_condicoes_de_entidades_ausentes(
         self,
         entidades: list[dict[str, Any]],
@@ -2628,7 +2936,7 @@ class MotorGerenciamentoEstadoConcorrente:
         presentes = {entidade["entity_id"] for entidade in entidades}
 
         for chave, estado in list(self._condicoes.items()):
-            if chave[0] != session_id or estado.get("event_id") is None:
+            if chave[0] != session_id:
                 continue
 
             entity_id = chave[2] if len(chave) >= 3 else None
@@ -2651,30 +2959,46 @@ class MotorGerenciamentoEstadoConcorrente:
             if regra is None:
                 continue
 
-            ultimo = int(estado.get("last_seen_ms", timestamp_ms))
-            if timestamp_ms - ultimo <= self.ttl_threshold_ms:
-                continue
+            estados = self._estados_da_condicao(estado)
+            restantes = []
 
-            contexto = dict(estado.get("contexto", {}))
+            for item in estados:
+                ultimo = int(item.get("last_seen_ms", timestamp_ms))
 
-            saida.append(
-                self._emitir_evento(
-                    regra,
-                    estado,
-                    "ENDED",
+                if timestamp_ms - ultimo <= self.ttl_threshold_ms:
+                    restantes.append(item)
+                    continue
+
+                if item.get("event_id"):
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            item,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            item.get("contexto", {}),
+                        )
+                    )
+
+            if restantes:
+                principal = restantes[0]
+                principal.pop("_eventos_adicionais", None)
+
+                if len(restantes) > 1:
+                    principal["_eventos_adicionais"] = restantes[1:]
+
+                self._condicoes[chave] = principal
+            else:
+                self._condicoes.pop(chave, None)
+                self.filtro_temporal.atualizar_persistencia(
+                    chave,
+                    False,
                     timestamp_ms,
-                    session_id,
-                    contexto,
+                    0,
                 )
-            )
+                self.filtro_temporal.ultimo_visto.pop(chave, None)
 
-            self._condicoes.pop(chave, None)
-            self.filtro_temporal.atualizar_persistencia(
-                chave,
-                False,
-                timestamp_ms,
-                0,
-            )
 
     def _expirar_rastros(
         self,
