@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
+import threading
 from collections import OrderedDict
 from typing import Any
 
@@ -145,6 +147,7 @@ class AdaptadorKafkaS2:
 
         self.consumer: Consumer | None = None
         self.producer: Producer | None = None
+        self._parar = threading.Event()
 
         # session_id -> {
         #     "inicio": instante_monotônico,
@@ -163,36 +166,102 @@ class AdaptadorKafkaS2:
             tuple[str, int], dict[int, bool]
         ] = {}
 
+        # Lotes processados cujas saídas ainda não foram totalmente
+        # publicadas ou cujos offsets ainda não foram confirmados.
+        self._lotes_pendentes_publicacao: dict[
+            tuple[tuple[str, int, int], ...],
+            dict[str, Any],
+        ] = {}
+
         # Chaves de quadros já encerrados, para detectar mensagens atrasadas.
         self.quadros_fechados: OrderedDict[
             tuple[str, str, int], None
         ] = OrderedDict()
 
     def _criar_clientes(self) -> None:
-        """Cria os clientes Kafka sem iniciar processamento."""
-        configuracao_consumer = {
-            "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
-            "group.id": KAFKA_GROUP_ID,
-            "auto.offset.reset": KAFKA_AUTO_OFFSET_RESET,
-            "enable.auto.commit": KAFKA_ENABLE_AUTO_COMMIT,
-            "enable.auto.offset.store": False,
+        """Cria os clientes Kafka usando configurações do ambiente."""
+
+        prefixo = "S2_KAFKA_"
+
+        propriedades_consumer = {
+            "group.id",
+            "group.instance.id",
+            "auto.offset.reset",
+            "enable.auto.commit",
+            "auto.commit.interval.ms",
+            "enable.auto.offset.store",
+            "session.timeout.ms",
+            "heartbeat.interval.ms",
+            "max.poll.interval.ms",
+            "enable.partition.eof",
+            "isolation.level",
         }
+
+        configuracao_kafka = {
+            ".".join(
+                parte.replace("\0", "_")
+                for parte in nome[len(prefixo):].lower()
+                .replace("__", "\0")
+                .split("_")
+            ): valor.strip()
+            for nome, valor in os.environ.items()
+            if nome.startswith(prefixo) and valor.strip()
+        }
+
+        configuracao_kafka["bootstrap.servers"] = KAFKA_BOOTSTRAP_SERVERS
+        configuracao_kafka["group.id"] = KAFKA_GROUP_ID
+        configuracao_kafka["auto.offset.reset"] = KAFKA_AUTO_OFFSET_RESET
+        configuracao_kafka.setdefault("client.id", KAFKA_GROUP_ID)
+
+        configuracao_kafka["enable.auto.commit"] = KAFKA_ENABLE_AUTO_COMMIT
+        configuracao_kafka["enable.auto.offset.store"] = False
+
+        configuracao_consumer = dict(configuracao_kafka)
 
         configuracao_producer = {
-            "bootstrap.servers": KAFKA_BOOTSTRAP_SERVERS,
-            "enable.idempotence": True,
-            "acks": "all",
+            chave: valor
+            for chave, valor in configuracao_kafka.items()
+            if chave not in propriedades_consumer
         }
 
-        self.consumer = Consumer(configuracao_consumer)
-        self.producer = Producer(configuracao_producer)
+        configuracao_producer["enable.idempotence"] = True
+        configuracao_producer["acks"] = "all"
 
-        self.consumer.subscribe(KAFKA_INPUT_TOPICS)
+        self.consumer = None
+        self.producer = None
 
-        logger.info(
-            "Consumidor S2 inscrito nos tópicos: %s",
-            ", ".join(KAFKA_INPUT_TOPICS),
-        )
+        try:
+            self.consumer = Consumer(configuracao_consumer)
+            self.producer = Producer(configuracao_producer)
+
+            self.consumer.subscribe(KAFKA_INPUT_TOPICS)
+
+            logger.info(
+                "Consumidor S2 inscrito nos tópicos: %s",
+                ", ".join(KAFKA_INPUT_TOPICS),
+            )
+
+        except Exception:
+            if self.producer is not None:
+                try:
+                    self.producer.flush(10.0)
+                except Exception:
+                    logger.exception(
+                        "Falha ao encerrar produtor durante inicialização."
+                    )
+
+            if self.consumer is not None:
+                try:
+                    self.consumer.close()
+                except Exception:
+                    logger.exception(
+                        "Falha ao encerrar consumidor durante inicialização."
+                    )
+
+            self.consumer = None
+            self.producer = None
+
+            raise
 
     def _registrar_offset(self, registro: dict[str, Any]) -> None:
         """Registra um offset recebido, ainda não processado."""
@@ -215,8 +284,9 @@ class AdaptadorKafkaS2:
 
         self._confirmar_offsets()
 
+
     def _confirmar_offsets(self) -> None:
-        """Confirma somente sequências contíguas de registros processados."""
+        """Confirma sequências contíguas e trata falhas por partição."""
         if self.consumer is None:
             return
 
@@ -228,21 +298,22 @@ class AdaptadorKafkaS2:
                 continue
 
             offsets_ordenados = sorted(pendentes)
-            primeiro_pendente = None
 
-            for offset in offsets_ordenados:
-                if not pendentes[offset]:
-                    primeiro_pendente = offset
-                    break
+            primeiro_pendente = next(
+                (
+                    offset
+                    for offset in offsets_ordenados
+                    if not pendentes[offset]
+                ),
+                None,
+            )
 
             if primeiro_pendente is not None:
                 proximo_offset = primeiro_pendente
             else:
                 proximo_offset = offsets_ordenados[-1] + 1
 
-            menor_offset = offsets_ordenados[0]
-
-            if proximo_offset <= menor_offset:
+            if proximo_offset <= offsets_ordenados[0]:
                 continue
 
             topic, partition = chave
@@ -260,19 +331,42 @@ class AdaptadorKafkaS2:
             asynchronous=False,
         )
 
-        if resultado:
+        # None representa sucesso conforme o comportamento simulado
+        # utilizado nos testes existentes.
+        if resultado is None:
+            particoes_confirmadas = set(avancos)
+            erros = []
+        else:
+            particoes_confirmadas = set()
+            erros = []
+
             for particao in resultado:
+                chave = (particao.topic, particao.partition)
                 erro = getattr(particao, "error", None)
 
                 if callable(erro):
                     erro = erro()
 
                 if erro:
-                    raise RuntimeError(
-                        f"Falha ao confirmar offset Kafka: {erro}"
+                    erros.append(f"{chave}: {erro}")
+                elif chave in avancos:
+                    particoes_confirmadas.add(chave)
+
+            for chave in avancos:
+                if (
+                    chave not in particoes_confirmadas
+                    and not any(
+                        erro.startswith(f"{chave}:")
+                        for erro in erros
+                    )
+                ):
+                    erros.append(
+                        f"{chave}: partição sem confirmação do Kafka"
                     )
 
-        for chave, proximo_offset in avancos.items():
+        # Remove somente os offsets das partições confirmadas.
+        for chave in particoes_confirmadas:
+            proximo_offset = avancos[chave]
             pendentes = self.offsets_pendentes[chave]
 
             for offset in list(pendentes):
@@ -282,7 +376,17 @@ class AdaptadorKafkaS2:
             if not pendentes:
                 del self.offsets_pendentes[chave]
 
-        logger.debug("Offsets Kafka confirmados: %s", offsets_commit)
+        if erros:
+            raise RuntimeError(
+                "Falha ao confirmar offset Kafka: "
+                + "; ".join(erros)
+            )
+
+        logger.debug(
+            "Offsets Kafka confirmados: %s",
+            offsets_commit,
+        )
+
 
     def _publicar_saidas(self, saidas: list[dict[str, Any]]) -> None:
         """Publica as saídas do motor e aguarda as confirmações do broker."""
@@ -348,26 +452,45 @@ class AdaptadorKafkaS2:
         logger.info("%s mensagem(ns) de saída publicadas.", len(saidas))
 
     def _processar_registros(self, registros: list[dict[str, Any]]) -> None:
-        """Executa o motor uma vez e publica todas as suas saídas."""
+        """Executa o motor uma vez e publica suas saídas com suporte a retentativas."""
         if not registros:
             return
 
-        mensagens = [registro["mensagem"] for registro in registros]
+        chave_lote = tuple(
+            sorted(
+                (
+                    registro["topic"],
+                    registro["partition"],
+                    registro["offset"],
+                )
+                for registro in registros
+            )
+        )
 
-        # Usa a API existente do motor S2.
-        # Se houver falha, não repetimos o lote nesta instância:
-        # o motor pode ter alterado parcialmente seu estado em memória.
-        saidas = self.camada_s2.processar_mensagens(mensagens)
+        lote = self._lotes_pendentes_publicacao.get(chave_lote)
 
-        self._publicar_saidas(saidas)
+        if lote is None:
+            mensagens = [registro["mensagem"] for registro in registros]
+            saidas = self.camada_s2.processar_mensagens(mensagens)
 
-        # Os offsets só são confirmados depois da publicação bem-sucedida.
+            lote = {
+                "saidas": saidas,
+                "publicadas": False,
+            }
+            self._lotes_pendentes_publicacao[chave_lote] = lote
+
+        if not lote["publicadas"]:
+            self._publicar_saidas(lote["saidas"])
+            lote["publicadas"] = True
+
         self._marcar_processados(registros)
+
+        del self._lotes_pendentes_publicacao[chave_lote]
 
         logger.info(
             "Lote processado: %s mensagem(ns) de entrada e %s saída(s).",
             len(registros),
-            len(saidas),
+            len(lote["saidas"]),
         )
 
     def _registrar_quadro_fechado(
@@ -499,8 +622,9 @@ class AdaptadorKafkaS2:
                 "ou fechar quadros prematuramente."
             )
 
+
     def _fechar_janelas_maduras(self, agora: float) -> None:
-        """Processa janelas de sessão que ultrapassaram a tolerância."""
+        """Processa janelas maduras sem perder registros em caso de falha."""
         sessoes_maduras = [
             session_id
             for session_id, janela in self.janelas.items()
@@ -508,7 +632,7 @@ class AdaptadorKafkaS2:
         ]
 
         for session_id in sessoes_maduras:
-            janela = self.janelas.pop(session_id)
+            janela = self.janelas[session_id]
 
             registros_por_quadro: dict[
                 tuple[str, str, int], list[dict[str, Any]]
@@ -530,8 +654,6 @@ class AdaptadorKafkaS2:
             registros_descartados: list[dict[str, Any]] = []
 
             for chave, registros in registros_por_quadro.items():
-                self._registrar_quadro_fechado(chave)
-
                 possui_i2 = any(
                     registro["mensagem"].get("schema") == SCHEMA_BASE_QUADRO
                     for registro in registros
@@ -550,22 +672,28 @@ class AdaptadorKafkaS2:
                         chave[2],
                     )
 
-            # Quadros sem I2 não geram entidade no motor.
-            # Seus offsets podem ser confirmados após o descarte registrado.
             if registros_descartados:
                 self._marcar_processados(registros_descartados)
 
-            # Mensagens auxiliares são preservadas mesmo quando não há
-            # quadros válidos. Assim, eventos de sessão e zona não somem.
             registros_prontos.extend(registros_auxiliares)
 
+            # A janela permanece no buffer enquanto o processamento
+            # não terminar com sucesso.
             if registros_prontos:
-                # Quadros válidos e auxiliares da sessão são enviados juntos.
-                # O motor organiza os eventos pela linha temporal.
                 self._processar_registros(registros_prontos)
 
+            # Somente depois do processamento bem-sucedido os quadros
+            # são registrados como fechados.
+            for chave in registros_por_quadro:
+                self._registrar_quadro_fechado(chave)
+
+            # Remove a janela apenas depois de concluir todas as etapas.
+            del self.janelas[session_id]
+
+
+
     def _fechar_mensagens_sem_sessao(self, agora: float) -> None:
-        """Processa comandos e demais mensagens sem sessão após a espera."""
+        """Processa mensagens sem sessão sem perdê-las em caso de falha."""
         prontas = [
             item["registro"]
             for item in self.sem_sessao
@@ -575,6 +703,10 @@ class AdaptadorKafkaS2:
         if not prontas:
             return
 
+        # Processa primeiro. Se houver falha, as mensagens permanecem
+        # no buffer para uma nova tentativa.
+        self._processar_registros(prontas)
+
         ids_prontos = {id(registro) for registro in prontas}
 
         self.sem_sessao = [
@@ -583,7 +715,6 @@ class AdaptadorKafkaS2:
             if id(item["registro"]) not in ids_prontos
         ]
 
-        self._processar_registros(prontas)
 
     def _fechar_buffers_maduros(self) -> None:
         """Fecha todas as janelas cujo tempo de espera terminou."""
@@ -592,24 +723,49 @@ class AdaptadorKafkaS2:
         self._fechar_janelas_maduras(agora)
         self._fechar_mensagens_sem_sessao(agora)
 
+
+
     def executar(self) -> None:
         """Inicia o consumo contínuo do Kafka."""
-        self._criar_clientes()
 
-        if self.consumer is None:
-            raise RuntimeError("Consumidor Kafka não foi inicializado.")
+        self._parar.clear()
 
-        logger.info(
-            "Adaptador Kafka S2 iniciado. Espera por quadro: %s ms; "
-            "sincronismo do motor: %s ms.",
-            KAFKA_FRAME_WAIT_MS,
-            SINCRONISMO_FUSAO_MS,
+        import signal
+        import threading
+
+        sinais_originais = {}
+        thread_principal = (
+            threading.current_thread() is threading.main_thread()
         )
 
+        def solicitar_parada(signum, frame):
+            logger.info(
+                "Sinal %s recebido. Encerrando o consumo Kafka.",
+                signum,
+            )
+            self._parar.set()
+
         try:
-            while True:
-                # Fecha primeiro as janelas vencidas. Assim, uma mensagem
-                # recebida depois do prazo não entra silenciosamente no lote.
+            if thread_principal:
+                for sinal in (signal.SIGINT, signal.SIGTERM):
+                    sinais_originais[sinal] = signal.getsignal(sinal)
+                    signal.signal(sinal, solicitar_parada)
+
+            self._criar_clientes()
+
+            if self.consumer is None:
+                raise RuntimeError(
+                    "Consumidor Kafka não foi inicializado."
+                )
+
+            logger.info(
+                "Adaptador Kafka S2 iniciado. Espera por quadro: %s ms; "
+                "sincronismo do motor: %s ms.",
+                KAFKA_FRAME_WAIT_MS,
+                SINCRONISMO_FUSAO_MS,
+            )
+
+            while not self._parar.is_set():
                 self._fechar_buffers_maduros()
 
                 mensagem_kafka = self.consumer.poll(
@@ -625,7 +781,9 @@ class AdaptadorKafkaS2:
                     if erro.code() == KafkaError._PARTITION_EOF:
                         continue
 
-                    raise RuntimeError(f"Erro no consumo Kafka: {erro}")
+                    raise RuntimeError(
+                        f"Erro no consumo Kafka: {erro}"
+                    )
 
                 registro = {
                     "topic": mensagem_kafka.topic(),
@@ -636,9 +794,9 @@ class AdaptadorKafkaS2:
 
                 self._registrar_offset(registro)
 
-                valor = mensagem_kafka.value()
-
                 try:
+                    valor = mensagem_kafka.value()
+
                     if valor is None:
                         raise ValueError(
                             "Mensagem Kafka recebida sem conteúdo."
@@ -665,26 +823,51 @@ class AdaptadorKafkaS2:
                 )
 
         except KeyboardInterrupt:
-            logger.info(
-                "Interrupção solicitada. Mensagens ainda no buffer "
-                "permanecerão sem confirmação de offset."
-            )
+            logger.info("Interrupção solicitada pelo usuário.")
 
         finally:
-            if self.producer is not None:
-                pendentes = self.producer.flush(10.0)
-
-                if pendentes:
-                    logger.error(
-                        "%s mensagem(ns) ainda pendentes no produtor.",
-                        pendentes,
+            try:
+                if self.offsets_pendentes:
+                    logger.info(
+                        "Encerrando com %s partição(ões) contendo offsets "
+                        "pendentes. Eles serão reprocessados posteriormente.",
+                        len(self.offsets_pendentes),
                     )
 
-            if self.consumer is not None:
-                self.consumer.close()
+                if self.producer is not None:
+                    try:
+                        pendentes = self.producer.flush(10.0)
 
-            logger.info("Adaptador Kafka S2 encerrado.")
+                        if pendentes:
+                            logger.error(
+                                "%s mensagem(ns) ainda pendentes no produtor.",
+                                pendentes,
+                            )
 
+                    except Exception:
+                        logger.exception(
+                            "Erro ao finalizar produtor Kafka."
+                        )
+
+                if self.consumer is not None:
+                    try:
+                        self.consumer.close()
+                    except Exception:
+                        logger.exception(
+                            "Erro ao fechar consumidor Kafka."
+                        )
+
+            finally:
+                for sinal, handler_original in sinais_originais.items():
+                    try:
+                        signal.signal(sinal, handler_original)
+                    except Exception:
+                        logger.exception(
+                            "Erro ao restaurar handler do sinal %s.",
+                            sinal,
+                        )
+
+                logger.info("Adaptador Kafka S2 encerrado.")
 
 def executar_kafka(camada_s2: Any) -> None:
     """Ponto de entrada utilizado pelo main.py."""

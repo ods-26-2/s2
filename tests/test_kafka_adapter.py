@@ -69,6 +69,12 @@ def criar_auxiliar(
         "mensagem": mensagem,
     }
 
+def criar_consumer_mock():
+    consumer = MagicMock()
+    consumer.commit.return_value = None
+    consumer.poll.return_value = None
+    return consumer
+
 
 class TestAdaptadorKafkaS2(unittest.TestCase):
 
@@ -149,6 +155,63 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
         # Nenhuma mensagem foi processada ou descartada.
         self.camada.processar_mensagens.assert_not_called()
 
+
+    def test_encerramento_fecha_produtor_e_consumidor(self):
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+
+        self.adaptador.consumer.poll.side_effect = (
+            lambda timeout: self.adaptador._parar.set()
+        )
+
+        with patch.object(self.adaptador, "_criar_clientes"):
+            self.adaptador.executar()
+
+        self.adaptador.producer.flush.assert_called_once_with(10.0)
+        self.adaptador.consumer.close.assert_called_once()
+
+    def test_encerramento_preserva_offsets_pendentes(self):
+        registro = criar_registro(
+            "ods.i2.tracks", "cam0", 10, 0
+        )
+
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+
+        self.adaptador._registrar_offset(registro)
+        self.adaptador.consumer.poll.side_effect = (
+            lambda timeout: self.adaptador._parar.set()
+        )
+
+        with patch.object(self.adaptador, "_criar_clientes"):
+            self.adaptador.executar()
+
+        self.adaptador.consumer.commit.assert_not_called()
+
+        self.assertEqual(
+            self.adaptador.offsets_pendentes[
+                (registro["topic"], registro["partition"])
+            ][registro["offset"]],
+            False,
+        )
+
+    def test_parada_interrompe_loop_de_consumo(self):
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+
+        self.adaptador.consumer.poll.side_effect = (
+            lambda timeout: self.adaptador._parar.set()
+        )
+
+        with patch.object(self.adaptador, "_criar_clientes"):
+            self.adaptador.executar()
+
+        self.adaptador.consumer.poll.assert_called_once()
+        self.adaptador.consumer.close.assert_called_once()
+
     def test_decodificar_mensagem_rejeita_json_invalido(self):
         with self.assertRaisesRegex(
             ValueError, "JSON UTF-8 válido"
@@ -181,10 +244,12 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
             "ods.i2.tracks", "cam0", 10, 0
         )
 
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
 
         # Simula erro retornado pelo Kafka no commit.
         particao_com_erro = MagicMock()
+        particao_com_erro.topic = registro["topic"]
+        particao_com_erro.partition = registro["partition"]
         particao_com_erro.error.return_value = "erro simulado"
 
         self.adaptador.consumer.commit.side_effect = [
@@ -226,6 +291,61 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
             self.adaptador.offsets_pendentes,
         )
 
+    def test_falha_parcial_no_commit_preserva_apenas_particoes_com_erro(self):
+        registro_a = criar_registro(
+            "ods.i2.tracks", "cam0", 10, 0, partition=0
+        )
+        registro_b = criar_registro(
+            "ods.i2.tracks", "cam1", 10, 1, partition=1
+        )
+
+        self.adaptador.consumer = criar_consumer_mock()
+
+        particao_ok = MagicMock()
+        particao_ok.topic = registro_a["topic"]
+        particao_ok.partition = registro_a["partition"]
+        particao_ok.error.return_value = None
+
+        particao_com_erro = MagicMock()
+        particao_com_erro.topic = registro_b["topic"]
+        particao_com_erro.partition = registro_b["partition"]
+        particao_com_erro.error.return_value = "erro simulado"
+
+        self.adaptador.consumer.commit.side_effect = [
+            [particao_ok, particao_com_erro],
+            None,
+        ]
+
+        self.adaptador._registrar_offset(registro_a)
+        self.adaptador._registrar_offset(registro_b)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "Falha ao confirmar offset Kafka"
+        ):
+            self.adaptador._marcar_processados(
+                [registro_a, registro_b]
+            )
+
+        # A partição confirmada deve ser removida.
+        self.assertNotIn(
+            (registro_a["topic"], registro_a["partition"]),
+            self.adaptador.offsets_pendentes,
+        )
+
+        # A partição que falhou deve continuar pendente.
+        self.assertIn(
+            (registro_b["topic"], registro_b["partition"]),
+            self.adaptador.offsets_pendentes,
+        )
+
+        # Uma nova tentativa confirma somente a partição pendente.
+        self.adaptador._confirmar_offsets()
+
+        self.assertEqual(self.adaptador.offsets_pendentes, {})
+        self.assertEqual(
+            self.adaptador.consumer.commit.call_count, 2
+        )
+
     def test_comando_regras_e_processado_apos_tempo_de_espera(self):
         registro = {
             "topic": "ods.s2.rules.command",
@@ -239,7 +359,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
         }
 
         self.adaptador.tempo_espera = 0.2
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
         self.adaptador.producer = MagicMock()
 
         self.camada.processar_mensagens.return_value = []
@@ -286,6 +406,132 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
             },
         )
 
+    def test_falha_no_flush_nao_impede_fechamento_consumidor(self):
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.side_effect = RuntimeError(
+            "falha no flush"
+        )
+        self.adaptador.consumer = criar_consumer_mock()
+
+        self.adaptador.consumer.poll.side_effect = (
+            lambda timeout: self.adaptador._parar.set()
+        )
+
+        with patch.object(self.adaptador, "_criar_clientes"):
+            self.adaptador.executar()
+
+        self.adaptador.producer.flush.assert_called_once_with(10.0)
+        self.adaptador.consumer.close.assert_called_once()
+
+    def test_falha_no_close_nao_impede_restauracao_sinais(self):
+        import signal
+
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+        self.adaptador.consumer.close.side_effect = RuntimeError(
+            "falha ao fechar consumidor"
+        )
+
+        self.adaptador.consumer.poll.side_effect = (
+            lambda timeout: self.adaptador._parar.set()
+        )
+
+        handlers_originais = {
+            sinal: signal.getsignal(sinal)
+            for sinal in (signal.SIGINT, signal.SIGTERM)
+        }
+
+        with patch.object(self.adaptador, "_criar_clientes"):
+            self.adaptador.executar()
+
+        for sinal, handler in handlers_originais.items():
+            self.assertIs(signal.getsignal(sinal), handler)
+
+        self.adaptador.consumer.close.assert_called_once()
+
+    def test_falha_ao_criar_produtor_fecha_consumidor(self):
+        consumidor_mock = MagicMock()
+
+        with (
+            patch(
+                "components.S2.kafka_adapter.Consumer",
+                return_value=consumidor_mock,
+            ),
+            patch(
+                "components.S2.kafka_adapter.Producer",
+                side_effect=RuntimeError("falha ao criar produtor"),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "falha ao criar produtor",
+            ):
+                self.adaptador._criar_clientes()
+
+        consumidor_mock.close.assert_called_once()
+
+        self.assertIsNone(self.adaptador.consumer)
+        self.assertIsNone(self.adaptador.producer)
+
+    def test_falha_ao_inscrever_topicos_limpa_clientes(self):
+        consumidor_mock = MagicMock()
+        consumidor_mock.subscribe.side_effect = RuntimeError(
+            "falha ao inscrever tópicos"
+        )
+
+        produtor_mock = MagicMock()
+        produtor_mock.flush.return_value = 0
+
+        with (
+            patch(
+                "components.S2.kafka_adapter.Consumer",
+                return_value=consumidor_mock,
+            ),
+            patch(
+                "components.S2.kafka_adapter.Producer",
+                return_value=produtor_mock,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "falha ao inscrever tópicos",
+            ):
+                self.adaptador._criar_clientes()
+
+        produtor_mock.flush.assert_called_once_with(10.0)
+        consumidor_mock.close.assert_called_once()
+
+        self.assertIsNone(self.adaptador.consumer)
+        self.assertIsNone(self.adaptador.producer)
+
+    def test_falha_na_limpeza_nao_oculta_erro_original(self):
+        consumidor_mock = MagicMock()
+        consumidor_mock.close.side_effect = RuntimeError(
+            "falha ao fechar consumidor"
+        )
+
+        with (
+            patch(
+                "components.S2.kafka_adapter.Consumer",
+                return_value=consumidor_mock,
+            ),
+            patch(
+                "components.S2.kafka_adapter.Producer",
+                side_effect=RuntimeError("erro original"),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "erro original",
+            ):
+                self.adaptador._criar_clientes()
+
+        consumidor_mock.close.assert_called_once()
+
+        self.assertIsNone(self.adaptador.consumer)
+        self.assertIsNone(self.adaptador.producer)
+
     def test_comando_regras_e_processado_fora_das_janelas(self):
         registro = {
             "topic": "ods.s2.rules.command",
@@ -318,7 +564,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
 
         chave = _chave_quadro(registro["mensagem"])
 
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
         self.adaptador._registrar_quadro_fechado(chave)
         self.adaptador._registrar_offset(registro)
 
@@ -343,13 +589,36 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
         # O motor não deve ser chamado.
         self.camada.processar_mensagens.assert_not_called()
 
+    def test_mensagem_i9_de_quadro_fechado_e_descartada(self):
+        chave = (SESSION, "cam0", 10)
+        self.adaptador._registrar_quadro_fechado(chave)
+
+        i9 = criar_registro(
+            "ods.i9.ppe_compliance",
+            "cam0",
+            10,
+            0,
+        )
+
+        self.adaptador.consumer = criar_consumer_mock()
+        self.adaptador._registrar_offset(i9)
+
+        self.adaptador._adicionar_mensagem(i9, 100.0)
+
+        self.assertEqual(self.adaptador.janelas, {})
+        self.adaptador.consumer.commit.assert_called_once()
+        self.assertNotIn(
+            (i9["topic"], i9["partition"]),
+            self.adaptador.offsets_pendentes,
+        )
+
     def test_falha_no_motor_impede_commit_dos_offsets(self):
         registro = criar_registro(
             "ods.i2.tracks", "cam0", 10, 0
         )
 
         self.adaptador.producer = MagicMock()
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
 
         self.camada.processar_mensagens.side_effect = RuntimeError(
             "falha simulada no motor"
@@ -394,6 +663,98 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
 
         self.assertEqual(len(registros), 3)
 
+    def test_falha_no_processamento_preserva_mensagens_sem_sessao(self):
+        registro = criar_registro(
+            "ods.s2.rules.command", "cam0", 10, 0
+        )
+
+        self.adaptador._adicionar_mensagem(registro, 100.0)
+
+        self.adaptador._processar_registros = MagicMock(
+            side_effect=[
+                RuntimeError("falha simulada"),
+                None,
+            ]
+        )
+
+        instante_maduro = (
+            100.0 + self.adaptador.tempo_espera + 1
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "falha simulada",
+        ):
+            self.adaptador._fechar_mensagens_sem_sessao(
+                instante_maduro
+            )
+
+        self.assertEqual(len(self.adaptador.sem_sessao), 1)
+
+        self.adaptador._fechar_mensagens_sem_sessao(
+            instante_maduro
+        )
+
+        self.assertEqual(self.adaptador.sem_sessao, [])
+        self.assertEqual(
+            self.adaptador._processar_registros.call_count,
+            2,
+        )
+
+    def test_executar_limpa_sinal_de_parada_anterior(self):
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+
+        self.adaptador._parar.set()
+        self.adaptador.consumer.poll.side_effect = (
+            lambda timeout: self.adaptador._parar.set()
+        )
+
+        with patch.object(self.adaptador, "_criar_clientes"):
+            self.adaptador.executar()
+
+        self.adaptador.consumer.poll.assert_called_once()
+
+    def test_falha_no_processamento_preserva_janela_para_retentativa(self):
+        registro = criar_registro(
+            "ods.i2.tracks", "cam0", 10, 0
+        )
+
+        self.adaptador._adicionar_mensagem(registro, 100.0)
+
+        self.adaptador._processar_registros = MagicMock(
+            side_effect=[
+                RuntimeError("falha simulada"),
+                None,
+            ]
+        )
+
+        instante_maduro = (
+            100.0 + self.adaptador.tempo_espera + 1
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "falha simulada",
+        ):
+            self.adaptador._fechar_janelas_maduras(instante_maduro)
+
+        self.assertIn(SESSION, self.adaptador.janelas)
+
+        chave = (SESSION, "cam0", 10)
+        self.assertNotIn(chave, self.adaptador.quadros_fechados)
+
+        self.adaptador._fechar_janelas_maduras(instante_maduro)
+
+        self.assertNotIn(SESSION, self.adaptador.janelas)
+        self.assertIn(chave, self.adaptador.quadros_fechados)
+
+        self.assertEqual(
+            self.adaptador._processar_registros.call_count,
+            2,
+        )
+
     def test_auxiliar_da_sessao_e_processada_junto_com_quadro(self):
         i2 = criar_registro("ods.i2.tracks", "cam0", 10, 0)
         auxiliar = criar_auxiliar("ods.session.started", 1)
@@ -429,7 +790,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
     def test_quadro_sem_i2_e_descartado(self):
         s1 = criar_registro("ods.s1.position", "cam0", 10, 0)
 
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
         self.adaptador._registrar_offset(s1)
         self.adaptador._adicionar_mensagem(s1, 100.0)
 
@@ -470,7 +831,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
 
         self.adaptador.producer = MagicMock()
         self.adaptador.producer.flush.return_value = 0
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
 
         self.camada.processar_mensagens.return_value = []
 
@@ -495,7 +856,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
 
         self.adaptador.producer = MagicMock()
         self.adaptador.producer.flush.return_value = 0
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
 
         self.camada.processar_mensagens.return_value = [saida]
 
@@ -521,7 +882,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
         )
 
     def test_offset_posterior_nao_e_confirmado_antes_do_anterior(self):
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
 
         anterior = criar_registro("ods.i2.tracks", "cam0", 10, 10)
         posterior = criar_registro("ods.i2.tracks", "cam0", 11, 11)
@@ -567,6 +928,105 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
             b"correlation-1",
         )
 
+    def test_falha_na_publicacao_reutiliza_saidas_sem_reprocessar_motor(self):
+        registro = criar_registro(
+            "ods.i2.tracks", "cam0", 10, 0
+        )
+
+        saida = {
+            "schema": "ods.s2.entity",
+            "message_id": "saida-001",
+            "session_id": SESSION,
+            "payload": {},
+        }
+
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.side_effect = [1, 0]
+        self.adaptador.consumer = criar_consumer_mock()
+
+        self.camada.processar_mensagens.return_value = [saida]
+
+        self.adaptador._registrar_offset(registro)
+
+        with self.assertRaises(RuntimeError):
+            self.adaptador._processar_registros([registro])
+
+        self.adaptador._processar_registros([registro])
+
+        self.camada.processar_mensagens.assert_called_once_with(
+            [registro["mensagem"]]
+        )
+
+        self.assertEqual(
+            self.adaptador.producer.produce.call_count,
+            2,
+        )
+
+        primeira_publicacao = (
+            self.adaptador.producer.produce.call_args_list[0].kwargs
+        )
+        segunda_publicacao = (
+            self.adaptador.producer.produce.call_args_list[1].kwargs
+        )
+
+        self.assertEqual(
+            primeira_publicacao["value"],
+            segunda_publicacao["value"],
+        )
+
+        self.adaptador.consumer.commit.assert_called_once()
+        self.assertEqual(
+            self.adaptador._lotes_pendentes_publicacao,
+            {},
+        )
+
+    def test_falha_no_commit_reutiliza_publicacao_sem_republicar(self):
+        registro = criar_registro(
+            "ods.i2.tracks", "cam0", 10, 0
+        )
+
+        saida = {
+            "schema": "ods.s2.entity",
+            "message_id": "saida-001",
+            "session_id": SESSION,
+            "payload": {},
+        }
+
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+
+        particao_com_erro = MagicMock()
+        particao_com_erro.topic = registro["topic"]
+        particao_com_erro.partition = registro["partition"]
+        particao_com_erro.error.return_value = "erro simulado"
+
+        self.adaptador.consumer.commit.side_effect = [
+            [particao_com_erro],
+            None,
+        ]
+
+        self.camada.processar_mensagens.return_value = [saida]
+
+        self.adaptador._registrar_offset(registro)
+
+        with self.assertRaises(RuntimeError):
+            self.adaptador._processar_registros([registro])
+
+        self.adaptador._processar_registros([registro])
+
+        self.camada.processar_mensagens.assert_called_once()
+        self.adaptador.producer.produce.assert_called_once()
+        self.assertEqual(
+            self.adaptador.consumer.commit.call_count,
+            2,
+        )
+
+        self.assertEqual(
+            self.adaptador._lotes_pendentes_publicacao,
+            {},
+        )
+
     def test_falha_na_publicacao_impede_commit_dos_offsets(self):
         registro = criar_registro(
             "ods.i2.tracks", "cam0", 10, 0
@@ -581,7 +1041,7 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
 
         self.adaptador.producer = MagicMock()
         self.adaptador.producer.flush.return_value = 1
-        self.adaptador.consumer = MagicMock()
+        self.adaptador.consumer = criar_consumer_mock()
 
         self.camada.processar_mensagens.return_value = [saida]
 
@@ -599,6 +1059,46 @@ class TestAdaptadorKafkaS2(unittest.TestCase):
             False,
         )
 
+    def test_erro_no_callback_de_entrega_impede_commit(self):
+        registro = criar_registro(
+            "ods.i2.tracks", "cam0", 10, 0
+        )
+
+        saida = {
+            "schema": "ods.s2.entity",
+            "message_id": "saida-001",
+            "session_id": SESSION,
+            "payload": {},
+        }
+
+        self.adaptador.producer = MagicMock()
+        self.adaptador.producer.flush.return_value = 0
+        self.adaptador.consumer = criar_consumer_mock()
+
+        def simular_falha_entrega(**kwargs):
+            callback = kwargs["on_delivery"]
+            callback(RuntimeError("falha simulada na entrega"), None)
+
+        self.adaptador.producer.produce.side_effect = (
+            simular_falha_entrega
+        )
+
+        self.camada.processar_mensagens.return_value = [saida]
+
+        self.adaptador._registrar_offset(registro)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "Falha na publicação de saídas Kafka"
+        ):
+            self.adaptador._processar_registros([registro])
+
+        self.adaptador.consumer.commit.assert_not_called()
+
+        self.assertFalse(
+            self.adaptador.offsets_pendentes[
+                (registro["topic"], registro["partition"])
+            ][registro["offset"]]
+        )
 
 if __name__ == "__main__":
     unittest.main()

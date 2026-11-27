@@ -71,6 +71,13 @@ ARTIFACT_VERSION_MOCK_I2 = "mot20-gt-mock-1"
 ARTIFACT_VERSION_MOCK_S1 = "zones-mot20-mock-1"
 ARTIFACT_VERSION_MOCK_CALIBRACAO = "cal-mock-world-1"
 
+# Limite de IDs mantidos para deduplicação em memória.
+S2_MAX_IDS_DEDUPLICACAO = int(
+    os.getenv("S2_MAX_IDS_DEDUPLICACAO", "100000")
+)
+
+if S2_MAX_IDS_DEDUPLICACAO < 1:
+    raise ValueError("S2_MAX_IDS_DEDUPLICACAO deve ser maior que zero")
 
 # Configurações utilizadas exclusivamente nos mocks.
 SESSION_ID_MOCK = "9c2a1f3e-4d5b-4c6a-9e8f-0a1b2c3d4e5f"
@@ -90,44 +97,55 @@ DESLOCAMENTO_CAM2_X_MOCK = 0.10
 
 DESLOCAMENTO_CAM2_Y_MOCK = 0.05
 
+
 # Configurações de integração Kafka.
-# Os valores podem ser sobrescritos por variáveis de ambiente.
+# Segue o padrão de configuração do S1, utilizando prefixo próprio.
+
+S2_KAFKA_PREFIX = "S2_KAFKA_"
 
 
+def _ler_configuracao_kafka(nome: str, padrao: str) -> str:
+    """Lê configuração S2_KAFKA_, mantendo compatibilidade temporária."""
+    return os.getenv(
+        f"{S2_KAFKA_PREFIX}{nome}",
+        os.getenv(nome, padrao),
+    )
 
-KAFKA_BOOTSTRAP_SERVERS = os.getenv(
-    "KAFKA_BOOTSTRAP_SERVERS",
+
+KAFKA_BOOTSTRAP_SERVERS = _ler_configuracao_kafka(
+    "BOOTSTRAP_SERVERS",
     "34.66.235.91:9093",
 )
 
-KAFKA_GROUP_ID = os.getenv(
-    "KAFKA_GROUP_ID",
+KAFKA_GROUP_ID = _ler_configuracao_kafka(
+    "GROUP_ID",
     "ods-s2-consumer",
 )
 
-KAFKA_AUTO_OFFSET_RESET = os.getenv(
-    "KAFKA_AUTO_OFFSET_RESET",
+KAFKA_AUTO_OFFSET_RESET = _ler_configuracao_kafka(
+    "AUTO_OFFSET_RESET",
     "earliest",
 )
 
+# O S2 confirma os offsets manualmente após publicar as saídas.
 KAFKA_ENABLE_AUTO_COMMIT = False
 
 KAFKA_POLL_TIMEOUT_SECONDS = float(
-    os.getenv("KAFKA_POLL_TIMEOUT_SECONDS", "1.0")
+    _ler_configuracao_kafka("POLL_TIMEOUT_SECONDS", "1.0")
 )
 
 KAFKA_BATCH_MAX_MESSAGES = int(
-    os.getenv("KAFKA_BATCH_MAX_MESSAGES", "100")
+    _ler_configuracao_kafka("BATCH_MAX_MESSAGES", "100")
 )
 
 KAFKA_FRAME_WAIT_MS = int(
-    os.getenv("KAFKA_FRAME_WAIT_MS", "200")
+    _ler_configuracao_kafka("FRAME_WAIT_MS", "200")
 )
 
 KAFKA_INPUT_TOPICS = [
     topic.strip()
-    for topic in os.getenv(
-        "KAFKA_INPUT_TOPICS",
+    for topic in _ler_configuracao_kafka(
+        "INPUT_TOPICS",
         (
             "ods.i2.tracks,"
             "ods.i9.ppe_compliance,"
@@ -142,16 +160,16 @@ KAFKA_INPUT_TOPICS = [
 ]
 
 KAFKA_OUTPUT_TOPICS = {
-    "ods.s2.entity": os.getenv(
-        "KAFKA_TOPIC_S2_ENTITY",
+    "ods.s2.entity": _ler_configuracao_kafka(
+        "TOPIC_S2_ENTITY",
         "ods.s2.entity",
     ),
-    "ods.s2.event": os.getenv(
-        "KAFKA_TOPIC_S2_EVENT",
+    "ods.s2.event": _ler_configuracao_kafka(
+        "TOPIC_S2_EVENT",
         "ods.s2.event",
     ),
-    "ods.s2.rules.reply": os.getenv(
-        "KAFKA_TOPIC_S2_RULES_REPLY",
+    "ods.s2.rules.reply": _ler_configuracao_kafka(
+        "TOPIC_S2_RULES_REPLY",
         "ods.s2.rules.reply",
     ),
 }

@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import math
 import uuid
-from collections import defaultdict
+import copy
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any, Iterable
 
@@ -35,6 +36,7 @@ try:
         SINCRONISMO_FUSAO_MS,
         TTL_ENTIDADE_MS,
         REIDENTIFICACAO_PIXELS,
+        S2_MAX_IDS_DEDUPLICACAO,
     )
     from .filtro_ruido_temporal import FiltroRuidoTemporal
 except ImportError:
@@ -45,6 +47,7 @@ except ImportError:
         SINCRONISMO_FUSAO_MS,
         TTL_ENTIDADE_MS,
         REIDENTIFICACAO_PIXELS,
+        S2_MAX_IDS_DEDUPLICACAO,
     )
     from filtro_ruido_temporal import FiltroRuidoTemporal
 
@@ -227,6 +230,8 @@ class MotorGerenciamentoEstadoConcorrente:
 
         self._sequence_por_sessao: dict[str, int] = defaultdict(int)
         self._processadas: set[str] = set()
+        self._ordem_processadas: deque[str] = deque()
+        self._max_ids_deduplicacao = S2_MAX_IDS_DEDUPLICACAO
         self._respostas_comandos_regras: dict[str, dict[str, Any]] = {}
 
         self._ultima_observacao_entidade: dict[tuple[str, str], int] = {}
@@ -246,6 +251,18 @@ class MotorGerenciamentoEstadoConcorrente:
     # Regras
     # ------------------------------------------------------------------
 
+    def _registrar_id_processado(self, message_id: str) -> None:
+        """Registra um ID e mantém a deduplicação limitada em memória."""
+        if message_id in self._processadas:
+            return
+
+        self._processadas.add(message_id)
+        self._ordem_processadas.append(message_id)
+
+        while len(self._ordem_processadas) > self._max_ids_deduplicacao:
+            id_antigo = self._ordem_processadas.popleft()
+            self._processadas.discard(id_antigo)
+            self._respostas_comandos_regras.pop(id_antigo, None)
 
     def _encerrar_condicoes_de_regras_substituidas(
         self,
@@ -757,6 +774,35 @@ class MotorGerenciamentoEstadoConcorrente:
 
         return mensagem_validada
 
+    def _capturar_estado(self) -> dict[str, Any]:
+        """Cria uma cópia do estado interno antes do processamento."""
+        atributos = {
+            nome: valor
+            for nome, valor in self.__dict__.items()
+            if nome != "filtro_temporal"
+        }
+
+        return {
+            "atributos": copy.deepcopy(atributos),
+            "ultimo_visto": copy.deepcopy(
+                self.filtro_temporal.ultimo_visto
+            ),
+            "inicio_condicao": copy.deepcopy(
+                self.filtro_temporal.inicio_condicao
+            ),
+        }
+
+    def _restaurar_estado(self, snapshot: dict[str, Any]) -> None:
+        """Restaura o estado anterior após uma falha no processamento."""
+        filtro = self.filtro_temporal
+
+        self.__dict__.clear()
+        self.__dict__.update(snapshot["atributos"])
+
+        # Preserva a instância original do filtro temporal.
+        self.filtro_temporal = filtro
+        filtro.ultimo_visto = snapshot["ultimo_visto"]
+        filtro.inicio_condicao = snapshot["inicio_condicao"]
 
     # ------------------------------------------------------------------
     # Entrada principal, deduplicação e timeline
@@ -766,7 +812,20 @@ class MotorGerenciamentoEstadoConcorrente:
         self,
         eventos_validos: Iterable[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Processa mensagens de entrada e retorna ods.s2.entity/event."""
+        """Processa mensagens com rollback em caso de falha."""
+        snapshot = self._capturar_estado()
+
+        try:
+            return self._fusao_e_deduplicacao_interna(eventos_validos)
+        except Exception:
+            self._restaurar_estado(snapshot)
+            raise
+
+    def _fusao_e_deduplicacao_interna(
+        self,
+        eventos_validos: Iterable[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Executa a fusão, deduplicação e construção da timeline."""
         mensagens: list[dict[str, Any]] = []
         comandos_regras: list[dict[str, Any]] = []
         comandos_repetidos: list[dict[str, Any]] = []
@@ -792,7 +851,7 @@ class MotorGerenciamentoEstadoConcorrente:
 
                     continue
 
-                self._processadas.add(message_id)
+                self._registrar_id_processado(message_id)
                 comandos_regras.append(comando)
                 continue
 
@@ -808,7 +867,7 @@ class MotorGerenciamentoEstadoConcorrente:
             if mensagem["message_id"] in self._processadas:
                 continue
 
-            self._processadas.add(mensagem["message_id"])
+            self._registrar_id_processado(mensagem["message_id"])
             mensagens.append(mensagem)
 
         quadros: dict[tuple[str, str, int], dict[str, Any]] = {}
@@ -832,7 +891,9 @@ class MotorGerenciamentoEstadoConcorrente:
 
                 source_id = mensagem.get("source_id")
                 if not isinstance(source_id, str) or not source_id.strip():
-                    raise ValueError(f"{schema} exige source_id string não vazia")
+                    raise ValueError(
+                        f"{schema} exige source_id string não vazia"
+                    )
 
                 chave = (
                     mensagem["session_id"],
@@ -871,7 +932,9 @@ class MotorGerenciamentoEstadoConcorrente:
                 self._captura_ms(mensagem)
                 for quadro in batch
                 for valor in quadro["mensagens"].values()
-                for mensagem in (valor if isinstance(valor, list) else [valor])
+                for mensagem in (
+                    valor if isinstance(valor, list) else [valor]
+                )
             )
             timeline.append((timestamp, 0, batch))
 

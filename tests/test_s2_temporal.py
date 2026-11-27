@@ -1255,5 +1255,74 @@ class TestMotorS2(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     motor.processar_mensagens(entrada)
 
+    def test_rollback_restaurar_estado_apos_falha_no_processamento(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+
+        filtro_original = motor.filtro_temporal
+        estado_original = motor._capturar_estado()
+
+        def falhar_ao_processar(*args, **kwargs):
+            motor.estado_em_memoria["alteracao-teste"] = {
+                "valor": "estado parcial"
+            }
+            motor.filtro_temporal.ultimo_visto["alteracao-teste"] = BASE
+            raise RuntimeError("falha simulada")
+
+        motor._processar_batch = falhar_ao_processar
+
+        entrada = frame_messages(1, BASE, sources=("cam0",))
+        ids_entrada = {m["message_id"] for m in entrada}
+
+        with self.assertRaisesRegex(RuntimeError, "falha simulada"):
+            motor.fusao_e_deduplicacao(entrada)
+
+        del motor._processar_batch
+        self.assertTrue(ids_entrada.isdisjoint(motor._processadas))
+        self.assertEqual(
+            motor._capturar_estado(),
+            estado_original,
+        )
+        self.assertIs(motor.filtro_temporal, filtro_original)
+
+    def test_deduplicacao_respeita_limite_e_ordem_fifo(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        motor._max_ids_deduplicacao = 3
+
+        for message_id in ("id-1", "id-2", "id-3", "id-4"):
+            motor._registrar_id_processado(message_id)
+
+        self.assertEqual(
+            motor._processadas,
+            {"id-2", "id-3", "id-4"},
+        )
+        self.assertEqual(
+            list(motor._ordem_processadas),
+            ["id-2", "id-3", "id-4"],
+        )
+        self.assertEqual(len(motor._processadas), 3)
+
+    def test_deduplicacao_remove_cache_de_comando_expirado(self):
+        motor = MotorGerenciamentoEstadoConcorrente()
+        motor._max_ids_deduplicacao = 2
+
+        motor._registrar_id_processado("comando-1")
+        motor._respostas_comandos_regras["comando-1"] = {
+            "message_id": "resposta-1",
+            "schema": "ods.s2.rules.reply",
+        }
+
+        motor._registrar_id_processado("comando-2")
+        motor._registrar_id_processado("comando-3")
+
+        self.assertNotIn("comando-1", motor._processadas)
+        self.assertNotIn(
+            "comando-1",
+            motor._respostas_comandos_regras,
+        )
+        self.assertEqual(
+            motor._processadas,
+            {"comando-2", "comando-3"},
+        )
+
 if __name__ == "__main__":
     unittest.main()

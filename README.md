@@ -13,17 +13,20 @@ Entre suas principais funcionalidades estão:
 - Deduplicação de mensagens;
 - Aplicação de regras temporais, incluindo persistência mínima, debounce e TTL;
 - Processamento de eventos de permanência em zonas e conformidade de EPIs;
-- Classificação de eventos conforme níveis de confiança e incerteza.
+- Classificação de eventos conforme níveis de confiança e incerteza;
+- Integração com o barramento Kafka, utilizando processamento por lotes e controle de offsets.
 
 ## Estrutura do Repositório
 
-- `components/S2/`: implementação do componente S2, incluindo motor de gerenciamento de estado, filtro temporal, configurações e regras demonstrativas.
+- `components/S2/`: implementação do componente S2, incluindo motor de gerenciamento de estado, filtro temporal, adaptador Kafka, configurações e regras demonstrativas.
 - `tests/`: testes automatizados do componente.
-- `data/`: arquivos JSON utilizados como entradas e saídas nos testes.
+- `data/`: arquivos JSON utilizados como entradas, artefatos demonstrativos e saídas nos testes.
 - `data/output_s2/`: arquivos JSON produzidos pelo componente.
 - `docs/`: documentação arquitetural e documentação complementar.
+- `benchmarks/`: scripts de avaliação de desempenho.
 - `Dockerfile`: configuração para construção da imagem Docker.
-- `dockerignore`: configuração dos arquivos excluídos do contexto de construção da imagem.
+- `.dockerignore`: configuração dos arquivos excluídos do contexto de construção da imagem.
+- `docker-compose.yml`: configuração de execução do componente com Docker Compose.
 - `pytest.ini`: configuração dos testes automatizados.
 - `requirements.txt`: dependências do projeto.
 - `RELATORIO_TESTES_S2.md`: relatório dos testes realizados.
@@ -32,7 +35,7 @@ Entre suas principais funcionalidades estão:
 
 ## Instruções de Execução Local
 
-Nesta etapa, o componente pode ser configurado e executado localmente por meio de arquivos JSON.
+O componente pode ser executado localmente por meio de arquivos JSON ou integrado ao barramento Kafka.
 
 ### Pré-requisitos
 
@@ -86,22 +89,22 @@ python -m components.S2.main
 Também é possível informar explicitamente os arquivos de entrada e saída:
 
 ```bash
-python -m components.S2.main --input data/entrada_teste_multiplas_regras.json --output data/output_s2/saida_s2.json
+python -m components.S2.main --input data/output/eventos_s1.json --output data/output_s2/saida_s2.json
 ```
 
-### 5. Configuração das regras
+### 5. Configuração dos artefatos
 
-O componente utiliza um artefato RULES para determinar as condições de geração dos eventos.
+O componente utiliza os artefatos RULES e PPE_CATALOG para determinar as condições de geração dos eventos e os requisitos de conformidade de EPIs.
 
-É possível informar um arquivo de regras explicitamente:
+É possível informar os arquivos explicitamente:
 
 ```bash
-python -m components.S2.main --input data/entrada_teste_multiplas_regras.json --output data/output_s2/saida_s2.json --rules data/regras_s2.json
+python -m components.S2.main --input data/entrada.json --output data/output_s2/saida.json --rules data/regras_s2.json --ppe-catalog data/ppe_catalog.json
 ```
 
-Quando o argumento `--rules` não é informado, o componente procura primeiro `data/regras_s2.json` e, caso não exista, utiliza `components/S2/regras_s2.exemplo.json`, se disponível.
+Quando os argumentos não são informados, o componente procura os artefatos nos caminhos padrão e utiliza arquivos demonstrativos como fallback, quando disponíveis.
 
-O arquivo de regras demonstrativas serve para validação e testes. Para utilização integrada, deve ser fornecido o artefato RULES correspondente ao ambiente.
+Os artefatos demonstrativos servem para validação e testes. Para utilização integrada, devem ser fornecidos os artefatos correspondentes ao ambiente.
 
 ### Argumentos disponíveis
 
@@ -109,8 +112,59 @@ O arquivo de regras demonstrativas serve para validação e testes. Para utiliza
 |---|---|
 | `--input` ou `-i` | Caminho do JSON de entrada |
 | `--output` ou `-o` | Caminho do JSON de saída |
-| `--rules` ou `-r` | Caminho do artefato de regras |
+| `--rules` ou `-r` | Caminho do artefato RULES |
+| `--ppe-catalog` | Caminho do artefato PPE_CATALOG |
 | `--fusao-mock` | Utiliza a entrada demonstrativa de fusão quando a entrada padrão está selecionada |
+| `--kafka` | Executa o componente em modo de consumo e publicação pelo Kafka |
+
+## Integração com Kafka
+
+O componente possui um adaptador Kafka responsável por consumir mensagens dos componentes anteriores, agrupá-las conforme os respectivos quadros e sessões, processá-las pelo motor S2 e publicar os resultados.
+
+### Tópicos de entrada
+
+- `ods.i2.tracks`
+- `ods.s1.position`
+- `ods.s1.zone_transition`
+- `ods.s1.zone_occupancy`
+- `ods.i9.ppe_compliance`
+- `ods.session.started`
+- `ods.s2.rules.command`
+
+### Tópicos de saída
+
+- `ods.s2.entity`
+- `ods.s2.event`
+- `ods.s2.rules.reply`
+
+### Execução
+
+Para iniciar o componente em modo Kafka:
+
+```bash
+python -m components.S2.main --kafka
+```
+
+A configuração do broker e dos demais parâmetros pode ser realizada por variáveis de ambiente.
+
+Entre as principais configurações estão:
+
+| Variável | Descrição |
+|---|---|
+| `KAFKA_BOOTSTRAP_SERVERS` | Endereço do broker Kafka |
+| `KAFKA_GROUP_ID` | Grupo de consumidores |
+| `KAFKA_AUTO_OFFSET_RESET` | Política inicial de leitura dos offsets |
+| `KAFKA_INPUT_TOPICS` | Tópicos de entrada |
+| `S2_KAFKA_FRAME_WAIT_MS` | Tempo de espera para agrupamento dos quadros |
+| `S2_MAX_IDS_DEDUPLICACAO` | Limite de identificadores mantidos no controle de deduplicação |
+
+As configurações com prefixo `S2_KAFKA_` são utilizadas para os parâmetros específicos do adaptador, mantendo compatibilidade com variáveis legadas quando aplicável.
+
+O adaptador utiliza controle manual de offsets. Os offsets são confirmados após a publicação bem-sucedida das respectivas saídas.
+
+**Observação:** o controle de publicação e confirmação de offsets permite retentativas durante a execução, mas não garante processamento exactly-once em todos os cenários. Uma interrupção inesperada entre a publicação e a confirmação dos offsets pode ocasionar duplicidade após a retomada.
+
+A execução em um broker compartilhado deve ocorrer somente após a autorização e a validação dos parâmetros de integração.
 
 ## Testes Automatizados
 
@@ -133,15 +187,18 @@ Os testes verificam:
 - Compatibilidade dos envelopes com os schemas da arquitetura 6c;
 - Ciclo de vida dos eventos;
 - Reidentificação de rastros;
-- Expiração e renovação de identidades.
+- Expiração e renovação de identidades;
+- Agrupamento e processamento de mensagens Kafka;
+- Publicação e confirmação de offsets;
+- Tratamento de falhas e retentativas.
 
-**Última validação registrada:** 11 testes aprovados.
+**Última validação registrada:** 78 testes aprovados e 7 subtests aprovados.
 
 Para mais detalhes, consulte `RELATORIO_TESTES_S2.md`.
 
 ## Execução com Docker
 
-O projeto também permite executar o componente em um contêiner Docker.
+O projeto permite executar o componente em um contêiner Docker.
 
 ### 1. Pré-requisitos
 
@@ -152,7 +209,7 @@ O projeto também permite executar o componente em um contêiner Docker.
 Na raiz do repositório, execute:
 
 ```bash
-docker build -t ods-s2 .
+docker build -t ods-s2:local .
 ```
 
 ### 3. Execute o componente
@@ -162,7 +219,7 @@ A pasta `data/` deve ser montada como volume para permitir que o contêiner leia
 Exemplo:
 
 ```bash
-docker run --rm -v "$(pwd)/data:/app/data" ods-s2 --input /app/data/entrada_teste_multiplas_regras.json --output /app/data/output_s2/saida_docker.json
+docker run --rm -v "$(pwd)/data:/app/data" ods-s2:local --input data/output/eventos_s1.json --output data/output_s2/saida_docker.json
 ```
 
 No Linux, esse comando compartilha a pasta `data/` do projeto com o contêiner.
@@ -172,12 +229,48 @@ Assim, os arquivos de entrada podem ser alterados sem reconstruir a imagem, e os
 No Windows PowerShell, utilize:
 
 ```powershell
-docker run --rm -v "${PWD}/data:/app/data" ods-s2 --input /app/data/entrada_teste_multiplas_regras.json --output /app/data/output_s2/saida_docker.json
+docker run --rm -v "${PWD}/data:/app/data" ods-s2:local --input data/output/eventos_s1.json --output data/output_s2/saida_docker.json
 ```
+
+### 4. Execução com Docker Compose
+
+O projeto também possui um arquivo `docker-compose.yml` para configurar a execução do S2 em modo Kafka.
+
+Para validar a configuração:
+
+```bash
+docker compose config
+```
+
+Para construir a imagem:
+
+```bash
+docker compose build
+```
+
+Para iniciar o serviço:
+
+```bash
+docker compose up -d
+```
+
+Para acompanhar os logs:
+
+```bash
+docker compose logs -f s2
+```
+
+Para interromper o serviço:
+
+```bash
+docker compose down
+```
+
+**Atenção:** a configuração padrão do Compose utiliza o endereço de broker definido em `KAFKA_BOOTSTRAP_SERVERS`, cujo valor padrão é `34.66.235.91:9093`. Antes de iniciar o serviço, configure o broker e confirme a autorização para consumir e publicar mensagens no ambiente correspondente.
 
 ## Fluxo de Execução
 
-O fluxo atual de execução local pode ser resumido da seguinte forma:
+O fluxo de execução local pode ser resumido da seguinte forma:
 
 ```text
 Clone do repositório
@@ -186,11 +279,9 @@ Criação do ambiente virtual
         ↓
 Instalação das dependências
         ↓
-Preparação do arquivo JSON de entrada
+Preparação dos artefatos e mensagens de entrada
         ↓
 Carregamento das regras
-        ↓
-Execução do componente S2
         ↓
 Validação e processamento das mensagens
         ↓
@@ -200,7 +291,7 @@ Aplicação das regras temporais
         ↓
 Geração das entidades e eventos
         ↓
-Gravação do JSON de saída
+Publicação no Kafka ou gravação do JSON de saída
 ```
 
 ## Estado Atual da Integração
@@ -210,17 +301,22 @@ O componente já possui:
 - Processamento local por arquivos JSON;
 - Testes funcionais com cenários simulados;
 - Testes automatizados com `pytest`;
-- Construção e execução em Docker.
+- Motor temporal com persistência mínima, debounce e TTL;
+- Consolidação e deduplicação de identidades;
+- Integração implementada com Kafka;
+- Adaptador Kafka com controle manual de offsets e retentativas;
+- Validação local com mensagens de entrada dos componentes I2, S1 e I9;
+- Construção e execução em Docker;
+- Configuração Docker Compose validada sintaticamente.
 
-Ainda estão pendentes:
+As seguintes validações ainda dependem do ambiente integrado:
 
-- Integração com o barramento Kafka;
-- Validação com mensagens reais produzidas pelos componentes I2, S1 e I9;
-- Testes ponta a ponta com o fluxo integrado;
-- Validação em dispositivo Jetson;
+- Execução ponta a ponta com o broker Kafka compartilhado;
+- Validação com os produtores reais I2, S1 e I9 em funcionamento simultâneo;
+- Testes em dispositivo Jetson;
 - Testes com câmeras reais.
 
-A integração Kafka será realizada em uma etapa posterior, após a validação dos fluxos por JSON.
+A implementação do adaptador Kafka e seus testes automatizados não substituem a validação ponta a ponta no ambiente integrado.
 
 ## Documentação Complementar
 
@@ -228,4 +324,5 @@ Para compreender os contratos, as interfaces e os detalhes de implementação, c
 
 - `docs/`: documentação arquitetural e técnica;
 - `RELATORIO_TESTES_S2.md`: resultados e evidências dos testes;
-- `components/S2/regras_s2.exemplo.json`: exemplo de configuração das regras.
+- `components/S2/regras_s2.exemplo.json`: exemplo de configuração das regras;
+- `data/ppe_catalog.exemplo.json`: exemplo de catálogo de EPIs.
