@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 .pytest_cache/
+
+# Resultados gerados pelo S2
+/data/output_s2/

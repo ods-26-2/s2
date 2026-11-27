@@ -1,0 +1,38 @@
+[
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-10-09T13:55:58.855Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_1",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 50.9,
+            "y": 25.0,
+            "timestamp": 1789566448100,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    },
+    {
+        "message_type": "event",
+        "schema": "ods.visao.evento_canonico",
+        "schema_version": "1.0",
+        "producer": "S2",
+        "published_at": "2026-10-09T13:55:58.855Z",
+        "payload": {
+            "global_entity_id": "GLOBAL_2",
+            "fontes_origem": [
+                "cam_frontal"
+            ],
+            "x": 10.0,
+            "y": 10.0,
+            "timestamp": 1789566448400,
+            "status": "CONSOLIDADO",
+            "zone_id": null
+        }
+    }
+]

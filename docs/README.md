@@ -20,9 +20,9 @@ A semântica do que é um **"risco crítico"** ou **"situação normal"** é del
 
 ### 2.2. Ocultação de Informação (*Information Hiding*)
 
-Parâmetros críticos de configuração, como a janela de tempo do *debounce* e os limiares de tolerância espacial, estão encapsulados de forma privada nas classes (`- debounce_window_ms`).
+Os parâmetros de configuração e as estruturas de estado utilizadas pelo S2 são mantidos como atributos das classes responsáveis pelo processamento.
 
-Isso garante baixo acoplamento e impede que componentes externos alterem o comportamento do filtro em tempo de execução.
+Dessa forma, o gerenciamento desses valores fica concentrado nos componentes que implementam as respectivas regras de processamento.
 
 ---
 
@@ -30,23 +30,27 @@ Isso garante baixo acoplamento e impede que componentes externos alterem o compo
 
 ### 3.1. Filtro de Ruído Temporal (Janela e Debounce)
 
-Detecções visuais na borda das zonas de interesse tendem a oscilar rapidamente entre **"dentro"** e **"fora"**.
+Detecções visuais podem apresentar oscilações rápidas, especialmente em situações próximas aos limites de uma zona de interesse.
 
-O S2 implementa algoritmos de limitação de taxa (*sliding window* / *token bucket*) para aplicar um *debounce* a esses eventos.
+Para reduzir o impacto de eventos repetidos em um curto intervalo, o S2 aplica um mecanismo de debounce temporal.
 
-Atualizações excessivas no mesmo milissegundo são descartadas, garantindo uma taxa de atualização estável para o Dashboard.
+### 3.2. Estado em Memória e Deduplicação
 
-### 3.2. Persistência Mínima (TTL e Condition Tracker)
+O S2 mantém informações das entidades processadas em memória por meio do atributo
+`estado_em_memoria`, utilizado pelo `MotorGerenciamentoEstadoConcorrente`.
 
-Para conferir resiliência ao sistema contra falhas da Inteligência Artificial (como oclusões visuais temporárias, onde uma pessoa passa atrás de uma pilastra), o S2 utiliza um rastreador de condição acoplado a um *Time-To-Live* (TTL).
+Esse estado auxilia o processamento das entidades durante a consolidação e
+deduplicação dos eventos recebidos. A fusão entre eventos considera a proximidade
+temporal e espacial das detecções, utilizando os parâmetros
+`time_sync_threshold_ms` e `merge_distance_threshold`.
 
-Se uma entidade desaparece do fluxo de entrada, ela é mantida na memória do S2 até que o TTL expire.
-
-Isso evita o registro incorreto de múltiplos eventos de saída e reentrada para a mesma entidade.
+O código atual ainda não implementa um mecanismo de TTL para expiração automática das
+entidades nem um rastreador específico para persistência durante o desaparecimento
+temporário de uma entidade.
 
 ### 3.3. Fusão e Deduplicação de Identidades
 
-O `MotorEstadoConcorrente` resolve conflitos oriundos de múltiplas fontes (várias câmeras apontando para o mesmo local).
+O `MotorGerenciamentoEstadoConcorrente` resolve conflitos oriundos de múltiplas fontes (várias câmeras apontando para o mesmo local).
 
 Utilizando limiares de distância espacial e sincronia temporal, o sistema correlaciona detecções concorrentes e funde as identidades, emitindo um único `global_entity_id`.
 

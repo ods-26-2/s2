@@ -1,0 +1,21 @@
+
+services:
+  s2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: ods-s2
+
+    command: ["--kafka"]
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: "${KAFKA_BOOTSTRAP_SERVERS:-34.66.235.91:9093}"
+      KAFKA_GROUP_ID: "${KAFKA_GROUP_ID:-ods-s2-consumer}"
+      KAFKA_AUTO_OFFSET_RESET: "${KAFKA_AUTO_OFFSET_RESET:-earliest}"
+      KAFKA_INPUT_TOPICS: "${KAFKA_INPUT_TOPICS:-ods.i2.tracks,ods.i9.ppe_compliance,ods.s1.position,ods.s1.zone_transition,ods.s1.zone_occupancy,ods.session.started,ods.s2.rules.command}"
+
+    volumes:
+      - ./data:/app/data
+
+    restart: unless-stopped

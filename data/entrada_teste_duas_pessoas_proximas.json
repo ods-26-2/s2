@@ -1,0 +1,143 @@
+
+[
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "750e8400-e29b-41d4-a716-446655440001",
+    "session_id": "750e8400-e29b-41d4-a716-446655440099",
+    "sequence": 1,
+    "captured_at": "2026-11-11T14:00:00.000Z",
+    "published_at": "2026-11-11T14:00:00.000Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 100,
+      "tracks": [
+        {
+          "track_id": "1",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "point_px": [505, 702],
+          "bbox": [412, 180, 598, 702]
+        },
+        {
+          "track_id": "2",
+          "detection_id": 1,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.94,
+          "point_px": [600, 702],
+          "bbox": [510, 180, 690, 702]
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.i2.tracks",
+    "schema_version": "1.0",
+    "producer": "I2",
+    "message_id": "750e8400-e29b-41d4-a716-446655440002",
+    "session_id": "750e8400-e29b-41d4-a716-446655440099",
+    "sequence": 2,
+    "captured_at": "2026-11-11T14:00:00.000Z",
+    "published_at": "2026-11-11T14:00:00.000Z",
+    "source_id": "cam_lateral",
+    "artifact_version": "bytetrack-1.2.0",
+    "payload": {
+      "frame_index": 200,
+      "tracks": [
+        {
+          "track_id": "7",
+          "detection_id": 0,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.95,
+          "point_px": [400, 650],
+          "bbox": [320, 150, 480, 650]
+        },
+        {
+          "track_id": "8",
+          "detection_id": 1,
+          "class": "person",
+          "state": "CONFIRMED",
+          "predicted": false,
+          "confidence": 0.94,
+          "point_px": [500, 650],
+          "bbox": [420, 150, 580, 650]
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.s1.position",
+    "schema_version": "1.0",
+    "producer": "S1",
+    "message_id": "750e8400-e29b-41d4-a716-446655440003",
+    "session_id": "750e8400-e29b-41d4-a716-446655440099",
+    "sequence": 3,
+    "captured_at": "2026-11-11T14:00:00.000Z",
+    "published_at": "2026-11-11T14:00:00.000Z",
+    "source_id": "cam_frontal",
+    "artifact_version": "zones-demo-1",
+    "payload": {
+      "frame_index": 100,
+      "positions": [
+        {
+          "track_id": "1",
+          "class": "person",
+          "position_m": [10.0, 10.0],
+          "space_id": "ambiente_teste",
+          "zone_ids": []
+        },
+        {
+          "track_id": "2",
+          "class": "person",
+          "position_m": [10.8, 10.0],
+          "space_id": "ambiente_teste",
+          "zone_ids": []
+        }
+      ]
+    }
+  },
+  {
+    "message_type": "event",
+    "schema": "ods.s1.position",
+    "schema_version": "1.0",
+    "producer": "S1",
+    "message_id": "750e8400-e29b-41d4-a716-446655440004",
+    "session_id": "750e8400-e29b-41d4-a716-446655440099",
+    "sequence": 4,
+    "captured_at": "2026-11-11T14:00:00.000Z",
+    "published_at": "2026-11-11T14:00:00.000Z",
+    "source_id": "cam_lateral",
+    "artifact_version": "zones-demo-1",
+    "payload": {
+      "frame_index": 200,
+      "positions": [
+        {
+          "track_id": "7",
+          "class": "person",
+          "position_m": [10.9, 10.0],
+          "space_id": "ambiente_teste",
+          "zone_ids": []
+        },
+        {
+          "track_id": "8",
+          "class": "person",
+          "position_m": [10.1, 10.0],
+          "space_id": "ambiente_teste",
+          "zone_ids": []
+        }
+      ]
+    }
+  }
+]

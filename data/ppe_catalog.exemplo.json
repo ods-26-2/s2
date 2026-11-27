@@ -1,0 +1,31 @@
+
+{
+  "catalog_version": "ppe-catalog-1",
+  "items": [
+    {
+      "equipment_item": "capacete",
+      "name": "Capacete",
+      "body_part": "HEAD"
+    },
+    {
+      "equipment_item": "luva",
+      "name": "Luvas",
+      "body_part": "HANDS"
+    },
+    {
+      "equipment_item": "oculos",
+      "name": "Óculos de proteção",
+      "body_part": "EYES"
+    }
+  ],
+  "required": [
+    {
+      "zone_id": "galpao-solda",
+      "items": [
+        "capacete",
+        "luva",
+        "oculos"
+      ]
+    }
+  ]
+}

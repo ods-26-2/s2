@@ -1,93 +1,3165 @@
-"""
-Módulo: Motor de Gerenciamento de Estado Concorrente
-Sprint: 2
 
-Responsabilidades atendidas nesta Sprint:
-- S2: Consolidação inicial: criar a estrutura do dicionário em memória.
-- S2: Fusão de identidade e Deduplicação: codificar a correlação para unificar IDs.
-- S2: Empacotamento Canónico: formatar a saída final no schema oficial da arquitetura.
+"""Motor do componente S2 — Regras temporais e eventos (arquitetura 6c).
+
+Consome:
+- ods.i2.tracks
+- ods.s1.position
+- ods.s1.zone_transition
+- ods.s1.zone_occupancy
+- ods.i9.ppe_compliance (quando instalado)
+
+Publica:
+- ods.s2.entity
+- ods.s2.event
+
+A identidade global é originada exclusivamente em rastros de I2.
+S1 complementa os rastros com posição e zonas.
+I9 é associado a I2 por source_id, session_id, frame_index e detection_id.
+
+A fusão métrica só ocorre quando as observações compartilham space_id.
+Coordenadas em pixels não são comparadas entre câmeras diferentes.
 """
+from __future__ import annotations
 
 import math
-from typing import Dict, Any, List
+import uuid
+import copy
+from collections import defaultdict, deque
 from datetime import datetime, timezone
+from typing import Any, Iterable
+
+try:
+    from .config import (
+        ARTIFACT_VERSION_FUSAO,
+        DISTANCIA_FUSAO_M,
+        SCHEMA_VERSION,
+        SINCRONISMO_FUSAO_MS,
+        TTL_ENTIDADE_MS,
+        REIDENTIFICACAO_PIXELS,
+        S2_MAX_IDS_DEDUPLICACAO,
+    )
+    from .filtro_ruido_temporal import FiltroRuidoTemporal
+except ImportError:
+    from config import (
+        ARTIFACT_VERSION_FUSAO,
+        DISTANCIA_FUSAO_M,
+        SCHEMA_VERSION,
+        SINCRONISMO_FUSAO_MS,
+        TTL_ENTIDADE_MS,
+        REIDENTIFICACAO_PIXELS,
+        S2_MAX_IDS_DEDUPLICACAO,
+    )
+    from filtro_ruido_temporal import FiltroRuidoTemporal
+
+
+SCHEMAS_CONSUMIDOS = {
+    "ods.i2.tracks",
+    "ods.i9.ppe_compliance",
+    "ods.s1.position",
+    "ods.s1.zone_transition",
+    "ods.s1.zone_occupancy",
+    "ods.session.started",
+    "ods.s2.rules.command",
+}
+
+SCHEMAS_POR_QUADRO = {
+    "ods.i2.tracks",
+    "ods.s1.position",
+    "ods.i9.ppe_compliance",
+}
+
+EVENT_TYPES = {
+    "ZONE_ENTER",
+    "ZONE_EXIT",
+    "DWELL_EXCEEDED",
+    "OCCUPANCY_ABOVE",
+    "OCCUPANCY_BELOW",
+    "PPE_NON_COMPLIANT",
+    "OBJECT_STATIONARY",
+    "CROSS_CAMERA_MATCH",
+}
+
+COMPLIANCE_VALIDOS = {"CORRECT", "INCORRECT", "ABSENT"}
+ESTADOS_RASTRO_VALIDOS = {"CONFIRMED", "LOST"}
+
+
+def _agora_iso() -> str:
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _iso_de_ms(timestamp_ms: int) -> str:
+    return (
+        datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _uuid_valido(valor: Any, campo: str) -> str:
+    if not isinstance(valor, str):
+        raise ValueError(f"Campo {campo!r} deve ser um UUID em string")
+
+    try:
+        identificador = uuid.UUID(valor)
+    except (ValueError, AttributeError) as exc:
+        raise ValueError(
+            f"Campo {campo!r} não contém UUID válido: {valor!r}"
+        ) from exc
+
+    if identificador.version != 4:
+        raise ValueError(
+            f"Campo {campo!r} deve ser UUID v4: {valor!r}"
+        )
+
+    return str(identificador)
+
+
+def _payload(mensagem: dict[str, Any]) -> dict[str, Any]:
+    valor = mensagem.get("payload")
+    if not isinstance(valor, dict):
+        raise ValueError(
+            f"A mensagem {mensagem.get('schema')!r} precisa ter payload object"
+        )
+    return valor
+
+
+def _numero_finito(valor: Any) -> bool:
+    return (
+        isinstance(valor, (int, float))
+        and not isinstance(valor, bool)
+        and math.isfinite(float(valor))
+    )
+
+
+def _par_numerico(valor: Any, campo: str) -> list[float] | None:
+    if valor is None:
+        return None
+
+    if (
+        not isinstance(valor, (list, tuple))
+        or len(valor) != 2
+        or not all(_numero_finito(v) for v in valor)
+    ):
+        raise ValueError(f"{campo} deve ser um par [x, y] de números finitos")
+
+    return [float(valor[0]), float(valor[1])]
+
+
+def _validar_lista_strings(valor: Any, campo: str) -> list[str]:
+    if not isinstance(valor, list):
+        raise ValueError(f"{campo} deve ser um array")
+
+    if any(not isinstance(item, str) or not item or item != item.strip() for item in valor):
+        raise ValueError(f"{campo} deve conter somente strings não vazias")
+
+    return list(valor)
+
 
 class MotorGerenciamentoEstadoConcorrente:
-    def __init__(self, merge_distance_threshold: float = 2.0, time_sync_threshold_ms: int = 100):
-        self.merge_distance_threshold = merge_distance_threshold
+    """Implementa fusão de identidade e qualificação temporal de eventos."""
+
+    
+    def __init__(
+        self,
+        merge_distance_threshold: float = DISTANCIA_FUSAO_M,
+        time_sync_threshold_ms: int = SINCRONISMO_FUSAO_MS,
+        filtro_temporal: FiltroRuidoTemporal | None = None,
+        ttl_threshold_ms: int = TTL_ENTIDADE_MS,
+        artefato_ppe_catalog: dict[str, Any] | None = None,
+    ) -> None:
+        if (
+            not _numero_finito(merge_distance_threshold)
+            or float(merge_distance_threshold) < 0
+        ):
+            raise ValueError(
+                "merge_distance_threshold deve ser number finito >= 0"
+            )
+
+        for nome, valor in (
+            ("time_sync_threshold_ms", time_sync_threshold_ms),
+            ("ttl_threshold_ms", ttl_threshold_ms),
+        ):
+            if (
+                not isinstance(valor, int)
+                or isinstance(valor, bool)
+                or valor < 0
+            ):
+                raise ValueError(f"{nome} deve ser integer >= 0")
+
+        if (
+            not _numero_finito(REIDENTIFICACAO_PIXELS)
+            or REIDENTIFICACAO_PIXELS < 0
+        ):
+            raise ValueError(
+                "REIDENTIFICACAO_PIXELS deve ser finito e >= 0"
+            )
+
+        self.merge_distance_threshold = float(merge_distance_threshold)
         self.time_sync_threshold_ms = time_sync_threshold_ms
-        self.estado_em_memoria = {}
+        self.ttl_threshold_ms = ttl_threshold_ms
+        self.filtro_temporal = filtro_temporal or FiltroRuidoTemporal()
+
+        self.estado_em_memoria: dict[str, dict[str, Any]] = {}
         self.global_id_counter = 1
 
-    def atualizar_estado_memoria(self, evento: Dict[str, Any]):
-        """Registra o evento original na memória."""
-        entity_id = evento.get("entity_id")
-        self.estado_em_memoria[entity_id] = evento
+        # Artefato RULES.
+        self.artifact_version_regras: str | None = None
+        self.regras: list[dict[str, Any]] = []
 
-    def fusao_e_deduplicacao(self, eventos_validos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Aplica a regra de proximidade temporal e espacial, devolvendo o envelope S2."""
-        eventos_canonicos = []
-        indices_processados = set()
-        
-        for i, ev_base in enumerate(eventos_validos):
-            self.atualizar_estado_memoria(ev_base)
-            
-            if i in indices_processados:
+        # Artefato PPE_CATALOG.
+        self.catalog_version_ppe: str | None = None
+        self.ppe_catalog_items: dict[str, dict[str, Any]] = {}
+        self.ppe_required_by_zone: dict[str, list[str]] = {}
+
+        # Chave local: (session_id, source_id, track_id).
+        self._track_to_entity: dict[tuple[str, str, str], str] = {}
+
+        # Chave de condição: (session_id, rule_id, identidade...).
+        self._condicoes: dict[tuple[Any, ...], dict[str, Any]] = {}
+
+        self._contagem_zonas: dict[tuple[str, str], int] = {}
+        self._inicio_zona: dict[tuple[str, str], int] = {}
+
+        self._posicao_base: dict[
+            tuple[str, str], tuple[int, float, float, str]
+        ] = {}
+
+        self._sequence_por_sessao: dict[str, int] = defaultdict(int)
+        self._processadas: set[str] = set()
+        self._ordem_processadas: deque[str] = deque()
+        self._max_ids_deduplicacao = S2_MAX_IDS_DEDUPLICACAO
+        self._respostas_comandos_regras: dict[str, dict[str, Any]] = {}
+
+        self._ultima_observacao_entidade: dict[tuple[str, str], int] = {}
+
+        self._ultima_observacao_rastro: dict[
+            tuple[str, str, str], int
+        ] = {}
+
+        self._estado_entidades: dict[str, dict[str, Any]] = {}
+
+        # Carrega o catálogo quando fornecido.
+        if artefato_ppe_catalog is not None:
+            self.carregar_ppe_catalog(artefato_ppe_catalog)
+
+
+    # ------------------------------------------------------------------
+    # Regras
+    # ------------------------------------------------------------------
+
+    def _registrar_id_processado(self, message_id: str) -> None:
+        """Registra um ID e mantém a deduplicação limitada em memória."""
+        if message_id in self._processadas:
+            return
+
+        self._processadas.add(message_id)
+        self._ordem_processadas.append(message_id)
+
+        while len(self._ordem_processadas) > self._max_ids_deduplicacao:
+            id_antigo = self._ordem_processadas.popleft()
+            self._processadas.discard(id_antigo)
+            self._respostas_comandos_regras.pop(id_antigo, None)
+
+    def _encerrar_condicoes_de_regras_substituidas(
+        self,
+        novas_regras: list[dict[str, Any]],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
+        """Encerra eventos de regras removidas ou modificadas."""
+        regras_novas_por_id = {
+            regra["rule_id"]: regra
+            for regra in novas_regras
+        }
+
+        regras_antigas_por_id = {
+            regra["rule_id"]: regra
+            for regra in self.regras
+        }
+
+        regras_afetadas = {
+            rule_id
+            for rule_id, regra_antiga in regras_antigas_por_id.items()
+            if regras_novas_por_id.get(rule_id) != regra_antiga
+        }
+
+        if not regras_afetadas:
+            return []
+
+        saida: list[dict[str, Any]] = []
+
+        for chave, estado in list(self._condicoes.items()):
+            if len(chave) < 2:
                 continue
-                
-            # Extrai coordenadas de forma segura (lida com chaves aninhadas do Mock)
-            coords_base = ev_base.get("world_coordinates", {})
-            x_base = coords_base.get("x") if coords_base else ev_base.get("x", 0.0)
-            y_base = coords_base.get("y") if coords_base else ev_base.get("y", 0.0)
-            fonte_base = ev_base.get("source_id") or ev_base.get("source", "desconhecida")
-            
-            # Constrói apenas a secção de dados (Payload)
-            payload = {
-                "global_entity_id": f"GLOBAL_{self.global_id_counter}",
-                "fontes_origem": [fonte_base],
-                "x": x_base,
-                "y": y_base,
-                "timestamp": ev_base.get("timestamp"),
-                "status": "CONSOLIDADO"
+
+            session_id, rule_id = chave[0], chave[1]
+
+            if rule_id not in regras_afetadas:
+                continue
+
+            regra_antiga = regras_antigas_por_id[rule_id]
+
+            for item in self._estados_da_condicao(estado):
+                if item.get("event_id"):
+                    saida.append(
+                        self._emitir_evento(
+                            regra_antiga,
+                            item,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            item.get("contexto", {}),
+                        )
+                    )
+
+            self._condicoes.pop(chave, None)
+            self.filtro_temporal.ultimo_visto.pop(chave, None)
+            self.filtro_temporal.inicio_condicao.pop(chave, None)
+
+        return saida
+
+
+    def carregar_regras(
+        self,
+        artefato_regras: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """Carrega o payload do artefato RULES."""
+        if artefato_regras is None:
+            eventos_encerrados = self._encerrar_condicoes_de_regras_substituidas(
+                [],
+                FiltroRuidoTemporal.timestamp_em_ms(_agora_iso()),
+            )
+            self.artifact_version_regras = None
+            self.regras = []
+            return eventos_encerrados
+
+        if not isinstance(artefato_regras, dict):
+            raise ValueError("O artefato RULES deve ser um objeto JSON")
+
+        versao = artefato_regras.get("artifact_version")
+        regras = artefato_regras.get("rules")
+
+        if not isinstance(versao, str) or not versao.strip():
+            raise ValueError("O artefato RULES exige artifact_version não vazio")
+
+        if not isinstance(regras, list):
+            raise ValueError("O artefato RULES exige rules como array")
+
+        validadas: list[dict[str, Any]] = []
+        ids: set[str] = set()
+
+        obrigatorios = (
+            "rule_id",
+            "event_type",
+            "min_confidence",
+            "uncertain_below",
+            "min_duration_ms",
+            "debounce_ms",
+        )
+
+        for indice, regra_original in enumerate(regras):
+            if not isinstance(regra_original, dict):
+                raise ValueError(f"rules[{indice}] deve ser um object")
+
+            regra = dict(regra_original)
+            faltantes = [
+                campo for campo in obrigatorios if campo not in regra
+            ]
+            if faltantes:
+                raise ValueError(
+                    f"rules[{indice}] sem campos obrigatórios: "
+                    f"{', '.join(faltantes)}"
+                )
+
+            rule_id = regra["rule_id"]
+            if not isinstance(rule_id, str) or not rule_id.strip():
+                raise ValueError(
+                    f"rules[{indice}].rule_id deve ser string não vazia"
+                )
+            if rule_id in ids:
+                raise ValueError(f"rule_id duplicado: {rule_id}")
+            ids.add(rule_id)
+
+            event_type = regra["event_type"]
+            if not isinstance(event_type, str) or event_type not in EVENT_TYPES:
+                raise ValueError(f"UNKNOWN_EVENT_TYPE: {event_type!r}")
+
+            min_conf = regra["min_confidence"]
+            uncertain_below = regra["uncertain_below"]
+
+            if not _numero_finito(min_conf) or not 0 <= min_conf <= 1:
+                raise ValueError(
+                    f"rules[{indice}].min_confidence deve estar entre 0 e 1"
+                )
+
+            if (
+                not _numero_finito(uncertain_below)
+                or not min_conf <= uncertain_below <= 1
+            ):
+                raise ValueError(
+                    f"rules[{indice}].uncertain_below deve estar "
+                    "entre min_confidence e 1"
+                )
+
+            for campo in ("min_duration_ms", "debounce_ms"):
+                valor = regra[campo]
+                if (
+                    not isinstance(valor, int)
+                    or isinstance(valor, bool)
+                    or valor < 0
+                ):
+                    raise ValueError(
+                        f"rules[{indice}].{campo} deve ser integer >= 0"
+                    )
+
+            tipos_com_threshold = {
+                "DWELL_EXCEEDED",
+                "OCCUPANCY_ABOVE",
+                "OCCUPANCY_BELOW",
+                "OBJECT_STATIONARY",
             }
-            
-            if "zone_id" in ev_base:
-                payload["zone_id"] = ev_base.get("zone_id")
-                
-            self.global_id_counter += 1
-            indices_processados.add(i)
-            
-            for j, ev_comparacao in enumerate(eventos_validos):
-                if j in indices_processados:
+            if event_type in tipos_com_threshold and "threshold" not in regra:
+                raise ValueError(
+                    f"rules[{indice}].threshold é obrigatório para {event_type}"
+                )
+
+            if "threshold" in regra:
+                threshold = regra["threshold"]
+                if not _numero_finito(threshold) or float(threshold) < 0:
+                    raise ValueError(
+                        f"rules[{indice}].threshold deve ser number finito >= 0"
+                    )
+
+            for campo in ("class", "zone_id", "equipment_item"):
+                if campo in regra and regra[campo] is not None:
+                    if not isinstance(regra[campo], str):
+                        raise ValueError(
+                            f"rules[{indice}].{campo} deve ser string"
+                        )
+
+            validadas.append(regra)
+
+        timestamp_ms = FiltroRuidoTemporal.timestamp_em_ms(_agora_iso())
+
+        eventos_encerrados = self._encerrar_condicoes_de_regras_substituidas(
+            validadas,
+            timestamp_ms,
+        )
+
+        self.artifact_version_regras = versao
+        self.regras = validadas
+
+        return eventos_encerrados
+
+
+    def carregar_ppe_catalog(
+        self,
+        artefato_ppe_catalog: dict[str, Any] | None,
+    ) -> None:
+        """Valida e carrega o artefato PPE_CATALOG."""
+
+        if artefato_ppe_catalog is None:
+            self.catalog_version_ppe = None
+            self.ppe_catalog_items = {}
+            self.ppe_required_by_zone = {}
+            return
+
+        if not isinstance(artefato_ppe_catalog, dict):
+            raise ValueError(
+                "O PPE_CATALOG deve ser um objeto JSON"
+            )
+
+        versao = artefato_ppe_catalog.get("catalog_version")
+        items = artefato_ppe_catalog.get("items")
+        required = artefato_ppe_catalog.get("required")
+
+        if not isinstance(versao, str) or not versao.strip():
+            raise ValueError(
+                "O PPE_CATALOG exige catalog_version não vazio"
+            )
+
+        if not isinstance(items, list):
+            raise ValueError(
+                "O PPE_CATALOG exige items como array"
+            )
+
+        if not isinstance(required, list):
+            raise ValueError(
+                "O PPE_CATALOG exige required como array"
+            )
+
+        partes_validas = {
+            "HEAD",
+            "EYES",
+            "EARS",
+            "HANDS",
+            "FEET",
+            "TORSO",
+        }
+
+        itens_validados: dict[str, dict[str, Any]] = {}
+
+        for indice, item_original in enumerate(items):
+            if not isinstance(item_original, dict):
+                raise ValueError(
+                    f"items[{indice}] deve ser um objeto"
+                )
+
+            item = dict(item_original)
+
+            equipamento = item.get("equipment_item")
+            nome = item.get("name")
+            parte_corpo = item.get("body_part")
+
+            if not isinstance(equipamento, str) or not equipamento or equipamento != equipamento.strip():
+                raise ValueError(
+                    f"items[{indice}].equipment_item deve ser "
+                    "string não vazia"
+                )
+
+            if equipamento in itens_validados:
+                raise ValueError(
+                    f"equipment_item duplicado no PPE_CATALOG: "
+                    f"{equipamento}"
+                )
+
+            if not isinstance(nome, str) or not nome.strip():
+                raise ValueError(
+                    f"items[{indice}].name deve ser string não vazia"
+                )
+
+            if parte_corpo not in partes_validas:
+                raise ValueError(
+                    f"items[{indice}].body_part inválido: "
+                    f"{parte_corpo!r}"
+                )
+
+            itens_validados[equipamento] = item
+
+        exigidos_por_zona: dict[str, list[str]] = {}
+
+        for indice, exigencia_original in enumerate(required):
+            if not isinstance(exigencia_original, dict):
+                raise ValueError(
+                    f"required[{indice}] deve ser um objeto"
+                )
+
+            zona = exigencia_original.get("zone_id")
+            equipamentos = exigencia_original.get("items")
+
+            if not isinstance(zona, str) or not zona or zona != zona.strip():
+                raise ValueError(
+                    f"required[{indice}].zone_id deve ser "
+                    "string não vazia"
+                )
+
+            if zona in exigidos_por_zona:
+                raise ValueError(
+                    f"Zona duplicada no PPE_CATALOG.required: {zona}"
+                )
+
+            if not isinstance(equipamentos, list):
+                raise ValueError(
+                    f"required[{indice}].items deve ser um array"
+                )
+
+            equipamentos_validados = _validar_lista_strings(
+                equipamentos,
+                f"required[{indice}].items",
+            )
+
+            if len(equipamentos_validados) != len(set(equipamentos_validados)):
+                raise ValueError(
+                    f"required[{indice}].items possui "
+                    "equipamentos duplicados"
+                )
+
+            for equipamento in equipamentos_validados:
+                if equipamento not in itens_validados:
+                    raise ValueError(
+                        f"PPE_CATALOG.required referencia "
+                        f"equipamento não cadastrado: {equipamento}"
+                    )
+
+            exigidos_por_zona[zona] = equipamentos_validados
+
+        self.catalog_version_ppe = versao
+        self.ppe_catalog_items = itens_validados
+        self.ppe_required_by_zone = exigidos_por_zona
+
+
+    # ------------------------------------------------------------------
+    # Estado e envelopes
+    # ------------------------------------------------------------------
+
+    def atualizar_estado_memoria(self, evento: dict[str, Any]) -> None:
+        """Registra a última observação local sem substituir IDs globais."""
+        session_id = evento.get("session_id", "")
+        source_id = evento.get("source_id", "")
+        track_id = evento.get("track_id", "")
+
+        if track_id:
+            chave = f"{session_id}:{source_id}:{track_id}"
+            self.estado_em_memoria[chave] = dict(evento)
+
+    def _novo_entity_id(self) -> str:
+        entity_id = f"e-{self.global_id_counter:06d}"
+        self.global_id_counter += 1
+        return entity_id
+
+    def _entity_para_rastro(
+        self,
+        session_id: str,
+        source_id: str,
+        track_id: str,
+    ) -> str:
+        """Obtém ID global para rastro confirmado recebido de I2."""
+        chave = (session_id, source_id, track_id)
+        if chave not in self._track_to_entity:
+            self._track_to_entity[chave] = self._novo_entity_id()
+        return self._track_to_entity[chave]
+
+    def _proxima_sequence(self, session_id: str) -> int:
+        sequence = self._sequence_por_sessao[session_id]
+        self._sequence_por_sessao[session_id] += 1
+        return sequence
+
+    def _envelope_evento(
+        self,
+        schema: str,
+        session_id: str,
+        captured_at_ms: int,
+        source_id: str | None,
+        artifact_version: str | None,
+        correlation_id: str | None = None,
+    ) -> dict[str, Any]:
+        mensagem: dict[str, Any] = {
+            "message_type": "event",
+            "message_id": str(uuid.uuid4()),
+            "schema": schema,
+            "schema_version": SCHEMA_VERSION,
+            "producer": "S2",
+            "published_at": _agora_iso(),
+            "captured_at": _iso_de_ms(captured_at_ms),
+            "session_id": session_id,
+            "sequence": self._proxima_sequence(session_id),
+            "payload": {},
+        }
+
+        if source_id:
+            mensagem["source_id"] = source_id
+        if artifact_version:
+            mensagem["artifact_version"] = artifact_version
+        if correlation_id:
+            mensagem["correlation_id"] = correlation_id
+
+        return mensagem
+
+    @staticmethod
+    def _validar_mensagem(mensagem: Any, indice: int) -> dict[str, Any]:
+        if not isinstance(mensagem, dict):
+            raise ValueError(
+                f"Mensagem na posição {indice} não é um objeto JSON"
+            )
+
+        obrigatorios = (
+            "message_type",
+            "message_id",
+            "schema",
+            "schema_version",
+            "producer",
+            "published_at",
+            "session_id",
+            "sequence",
+            "payload",
+        )
+        faltantes = [
+            campo for campo in obrigatorios if campo not in mensagem
+        ]
+
+        if faltantes:
+            raise ValueError(
+                f"Mensagem na posição {indice} não segue o envelope comum "
+                f"1.0; faltam: {', '.join(faltantes)}"
+            )
+
+        if mensagem["message_type"] != "event":
+            raise ValueError(
+                "S2 esperava message_type='event', recebeu "
+                f"{mensagem['message_type']!r}"
+            )
+
+        _uuid_valido(mensagem["message_id"], "message_id")
+        _uuid_valido(mensagem["session_id"], "session_id")
+
+        for campo in ("schema", "schema_version", "producer"):
+            if not isinstance(mensagem[campo], str) or not mensagem[campo].strip():
+                raise ValueError(f"{campo} deve ser string não vazia")
+
+        if mensagem["schema_version"].split(".")[0] != "1":
+            raise ValueError(
+                f"Versão de schema incompatível: {mensagem['schema_version']!r}"
+            )
+
+        sequence = mensagem["sequence"]
+        if (
+            not isinstance(sequence, int)
+            or isinstance(sequence, bool)
+            or sequence < 0
+        ):
+            raise ValueError("sequence deve ser integer >= 0")
+
+        FiltroRuidoTemporal.timestamp_em_ms(mensagem["published_at"])
+
+        if "captured_at" in mensagem:
+            FiltroRuidoTemporal.timestamp_em_ms(mensagem["captured_at"])
+        elif mensagem["schema"] != "ods.session.started":
+            raise ValueError(
+                f"A mensagem {mensagem['schema']!r} precisa ter captured_at"
+            )
+
+        _payload(mensagem)
+        return mensagem
+
+
+    @staticmethod
+    def validar_mensagem_entrada(mensagem: Any) -> dict[str, Any]:
+        """Valida uma mensagem de entrada sem modificar o estado do motor."""
+        if (
+            isinstance(mensagem, dict)
+            and mensagem.get("schema") == "ods.s2.rules.command"
+        ):
+            return MotorGerenciamentoEstadoConcorrente._validar_comando_regras(
+                mensagem,
+                0,
+            )
+
+        mensagem_validada = (
+            MotorGerenciamentoEstadoConcorrente._validar_mensagem(
+                mensagem,
+                0,
+            )
+        )
+
+        schema = mensagem_validada["schema"]
+
+        if schema not in SCHEMAS_CONSUMIDOS:
+            raise ValueError(
+                f"S2 não consome o schema {schema!r}; "
+                "confira o mapa de produção/consumo da arquitetura 6c"
+            )
+
+        if schema in SCHEMAS_POR_QUADRO:
+            payload = _payload(mensagem_validada)
+            frame_index = payload.get("frame_index")
+
+            if (
+                not isinstance(frame_index, int)
+                or isinstance(frame_index, bool)
+                or frame_index < 0
+            ):
+                raise ValueError(
+                    f"{schema} exige payload.frame_index integer >= 0"
+                )
+
+            source_id = mensagem_validada.get("source_id")
+
+            if not isinstance(source_id, str) or not source_id.strip():
+                raise ValueError(
+                    f"{schema} exige source_id string não vazia"
+                )
+
+        return mensagem_validada
+
+    def _capturar_estado(self) -> dict[str, Any]:
+        """Cria uma cópia do estado interno antes do processamento."""
+        atributos = {
+            nome: valor
+            for nome, valor in self.__dict__.items()
+            if nome != "filtro_temporal"
+        }
+
+        return {
+            "atributos": copy.deepcopy(atributos),
+            "ultimo_visto": copy.deepcopy(
+                self.filtro_temporal.ultimo_visto
+            ),
+            "inicio_condicao": copy.deepcopy(
+                self.filtro_temporal.inicio_condicao
+            ),
+        }
+
+    def _restaurar_estado(self, snapshot: dict[str, Any]) -> None:
+        """Restaura o estado anterior após uma falha no processamento."""
+        filtro = self.filtro_temporal
+
+        self.__dict__.clear()
+        self.__dict__.update(snapshot["atributos"])
+
+        # Preserva a instância original do filtro temporal.
+        self.filtro_temporal = filtro
+        filtro.ultimo_visto = snapshot["ultimo_visto"]
+        filtro.inicio_condicao = snapshot["inicio_condicao"]
+
+    # ------------------------------------------------------------------
+    # Entrada principal, deduplicação e timeline
+    # ------------------------------------------------------------------
+
+    def fusao_e_deduplicacao(
+        self,
+        eventos_validos: Iterable[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Processa mensagens com rollback em caso de falha."""
+        snapshot = self._capturar_estado()
+
+        try:
+            return self._fusao_e_deduplicacao_interna(eventos_validos)
+        except Exception:
+            self._restaurar_estado(snapshot)
+            raise
+
+    def _fusao_e_deduplicacao_interna(
+        self,
+        eventos_validos: Iterable[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Executa a fusão, deduplicação e construção da timeline."""
+        mensagens: list[dict[str, Any]] = []
+        comandos_regras: list[dict[str, Any]] = []
+        comandos_repetidos: list[dict[str, Any]] = []
+        comandos_repetidos_pendentes: dict[str, int] = defaultdict(int)
+
+        for indice, bruto in enumerate(eventos_validos):
+            if (
+                isinstance(bruto, dict)
+                and bruto.get("schema") == "ods.s2.rules.command"
+            ):
+                comando = self._validar_comando_regras(bruto, indice)
+                message_id = comando["message_id"]
+
+                if message_id in self._processadas:
+                    resposta_anterior = self._respostas_comandos_regras.get(
+                        message_id
+                    )
+
+                    if resposta_anterior is not None:
+                        comandos_repetidos.append(resposta_anterior)
+                    else:
+                        comandos_repetidos_pendentes[message_id] += 1
+
                     continue
-                    
-                diff_tempo = abs(ev_base.get("timestamp", 0) - ev_comparacao.get("timestamp", 0))
-                
-                coords_comp = ev_comparacao.get("world_coordinates", {})
-                x_comp = coords_comp.get("x") if coords_comp else ev_comparacao.get("x", 0.0)
-                y_comp = coords_comp.get("y") if coords_comp else ev_comparacao.get("y", 0.0)
-                
-                distancia = math.hypot(x_base - x_comp, y_base - y_comp)
-                
-                # Se for o mesmo alvo, junta as fontes
-                if diff_tempo <= self.time_sync_threshold_ms and distancia <= self.merge_distance_threshold:
-                    fonte_comp = ev_comparacao.get("source_id") or ev_comparacao.get("source", "desconhecida")
-                    payload["fontes_origem"].append(fonte_comp)
-                    indices_processados.add(j)
-                    self.atualizar_estado_memoria(ev_comparacao)
-            
-            # --- EMPACOTAMENTO CANÓNICO ---
-            agora_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-            
-            evento_final_s2 = {
-                "message_type": "event",
-                "schema": "ods.visao.evento_canonico",
-                "schema_version": "1.0",
-                "producer": "S2",
-                "published_at": agora_iso,
-                "payload": payload
+
+                self._registrar_id_processado(message_id)
+                comandos_regras.append(comando)
+                continue
+
+            mensagem = self._validar_mensagem(bruto, indice)
+            schema = mensagem["schema"]
+
+            if schema not in SCHEMAS_CONSUMIDOS:
+                raise ValueError(
+                    f"S2 não consome o schema {schema!r}; "
+                    "confira o mapa de produção/consumo da arquitetura 6c"
+                )
+
+            if mensagem["message_id"] in self._processadas:
+                continue
+
+            self._registrar_id_processado(mensagem["message_id"])
+            mensagens.append(mensagem)
+
+        quadros: dict[tuple[str, str, int], dict[str, Any]] = {}
+        auxiliares: list[dict[str, Any]] = []
+
+        for mensagem in mensagens:
+            schema = mensagem["schema"]
+
+            if schema in SCHEMAS_POR_QUADRO:
+                payload = _payload(mensagem)
+                frame_index = payload.get("frame_index")
+
+                if (
+                    not isinstance(frame_index, int)
+                    or isinstance(frame_index, bool)
+                    or frame_index < 0
+                ):
+                    raise ValueError(
+                        f"{schema} exige payload.frame_index integer >= 0"
+                    )
+
+                source_id = mensagem.get("source_id")
+                if not isinstance(source_id, str) or not source_id.strip():
+                    raise ValueError(
+                        f"{schema} exige source_id string não vazia"
+                    )
+
+                chave = (
+                    mensagem["session_id"],
+                    source_id,
+                    frame_index,
+                )
+
+                grupo = quadros.setdefault(
+                    chave,
+                    {
+                        "mensagens": {},
+                        "session_id": chave[0],
+                        "source_id": chave[1],
+                        "frame_index": chave[2],
+                    },
+                )
+
+                if schema == "ods.i9.ppe_compliance":
+                    grupo["mensagens"].setdefault(schema, []).append(mensagem)
+                else:
+                    if schema in grupo["mensagens"]:
+                        raise ValueError(
+                            f"Mais de uma mensagem {schema} para "
+                            f"source_id/frame_index {chave[1:]}; "
+                            "o contrato exige uma mensagem por quadro"
+                        )
+                    grupo["mensagens"][schema] = mensagem
+            else:
+                auxiliares.append(mensagem)
+
+        batches = self._agrupar_instantes_de_fusao(list(quadros.values()))
+        timeline: list[tuple[int, int, Any]] = []
+
+        for batch in batches:
+            timestamp = min(
+                self._captura_ms(mensagem)
+                for quadro in batch
+                for valor in quadro["mensagens"].values()
+                for mensagem in (
+                    valor if isinstance(valor, list) else [valor]
+                )
+            )
+            timeline.append((timestamp, 0, batch))
+
+        for mensagem in auxiliares:
+            timestamp = (
+                self._captura_ms(mensagem)
+                if "captured_at" in mensagem
+                else FiltroRuidoTemporal.timestamp_em_ms(
+                    mensagem["published_at"]
+                )
+            )
+
+            prioridade = (
+                -2
+                if mensagem["schema"] == "ods.session.started"
+                else 1
+            )
+
+            timeline.append((timestamp, prioridade, mensagem))
+
+        for comando in comandos_regras:
+            timestamp = FiltroRuidoTemporal.timestamp_em_ms(
+                comando["published_at"]
+            )
+            timeline.append((timestamp, -1, comando))
+
+        timeline.sort(key=lambda item: (item[0], item[1]))
+
+        saida: list[dict[str, Any]] = []
+
+        for timestamp_ms, tipo, item in timeline:
+            if tipo == -1:
+                resultado_comando = self._processar_comando_regras(item)
+
+                saida.extend(resultado_comando["eventos_encerrados"])
+
+                reply = resultado_comando["reply"]
+                message_id = item["message_id"]
+
+                self._respostas_comandos_regras[message_id] = reply
+                saida.append(reply)
+
+                repeticoes = comandos_repetidos_pendentes.pop(
+                    message_id,
+                    0,
+                )
+
+                for _ in range(repeticoes):
+                    saida.append(reply)
+
+            elif tipo == 0:
+                mensagem_entidade, entidades, observacoes = (
+                    self._processar_batch(item, timestamp_ms)
+                )
+                saida.append(mensagem_entidade)
+                saida.extend(
+                    self._avaliar_regras_por_entidade(
+                        entidades,
+                        observacoes,
+                        item,
+                        timestamp_ms,
+                    )
+                )
+                self._encerrar_condicoes_de_entidades_ausentes(
+                    entidades,
+                    timestamp_ms,
+                    item[0]["session_id"],
+                    saida,
+                )
+
+            else:
+                schema = item["schema"]
+
+                if schema == "ods.session.started":
+                    self._resetar_estado_sessao(item["session_id"])
+
+                elif schema == "ods.s1.zone_transition":
+                    saida.extend(
+                        self._processar_transicao_zona(item, timestamp_ms)
+                    )
+
+                elif schema == "ods.s1.zone_occupancy":
+                    saida.extend(
+                        self._processar_ocupacao(item, timestamp_ms)
+                    )
+
+        saida.extend(comandos_repetidos)
+
+        return saida
+
+    @staticmethod
+    def _validar_comando_regras(
+        mensagem: Any,
+        indice: int,
+    ) -> dict[str, Any]:
+        """Valida o perfil CMD de ods.s2.rules.command."""
+        if not isinstance(mensagem, dict):
+            raise ValueError(
+                f"Comando na posição {indice} não é um objeto JSON"
+            )
+
+        obrigatorios = (
+            "message_type",
+            "message_id",
+            "schema",
+            "schema_version",
+            "producer",
+            "published_at",
+            "target",
+            "payload",
+        )
+        faltantes = [
+            campo for campo in obrigatorios if campo not in mensagem
+        ]
+
+        if faltantes:
+            raise ValueError(
+                "ods.s2.rules.command sem campos obrigatórios: "
+                + ", ".join(faltantes)
+            )
+
+        if (
+            mensagem["message_type"] != "command"
+            or mensagem["schema"] != "ods.s2.rules.command"
+        ):
+            raise ValueError(
+                "Comando de regras precisa usar message_type='command' "
+                "e schema='ods.s2.rules.command'"
+            )
+
+        if mensagem["target"] != "S2":
+            raise ValueError("ods.s2.rules.command exige target='S2'")
+
+        _uuid_valido(mensagem["message_id"], "message_id")
+
+        if (
+            not isinstance(mensagem["schema_version"], str)
+            or mensagem["schema_version"].split(".")[0] != "1"
+        ):
+            raise ValueError(
+                "Versão de schema incompatível em ods.s2.rules.command"
+            )
+
+        FiltroRuidoTemporal.timestamp_em_ms(mensagem["published_at"])
+
+        if not isinstance(mensagem["payload"], dict):
+            raise ValueError(
+                "ods.s2.rules.command exige payload do tipo object"
+            )
+
+        if (
+            not isinstance(
+                mensagem["payload"].get("artifact_version"), str
+            )
+            or not isinstance(mensagem["payload"].get("rules"), list)
+        ):
+            raise ValueError(
+                "payload de ods.s2.rules.command exige "
+                "artifact_version string e rules array"
+            )
+
+        return mensagem
+
+    def _processar_comando_regras(
+        self,
+        comando: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Aplica o artefato RULES e devolve uma reply."""
+        payload = comando["payload"]
+        eventos_encerrados: list[dict[str, Any]] = []
+
+
+        try:
+            eventos_encerrados = self.carregar_regras(
+                {
+                    "artifact_version": payload["artifact_version"],
+                    "rules": payload["rules"],
+                }
+            )
+            resposta = {
+                "status": "OK",
+                "applied_rule_ids": [r["rule_id"] for r in self.regras],
             }
-            
-            eventos_canonicos.append(evento_final_s2)
-            
-        return eventos_canonicos
+
+        except ValueError as exc:
+            texto = str(exc)
+
+            if "UNKNOWN_EVENT_TYPE" in texto:
+                codigo = "UNKNOWN_EVENT_TYPE"
+            elif "UNKNOWN_ZONE" in texto:
+                codigo = "UNKNOWN_ZONE"
+            else:
+                codigo = "INVALID_RULE"
+
+            resposta = {
+                "status": "ERROR",
+                "error": {
+                    "code": codigo,
+                    "message": texto,
+                },
+            }
+
+        return {
+            "eventos_encerrados": eventos_encerrados,
+            "reply": {
+                "message_type": "reply",
+                "message_id": str(uuid.uuid4()),
+                "schema": "ods.s2.rules.reply",
+                "schema_version": SCHEMA_VERSION,
+                "producer": "S2",
+                "published_at": _agora_iso(),
+                "correlation_id": comando["message_id"],
+                "payload": resposta,
+            },
+        }
+
+    def processar_mensagens(
+        self,
+        mensagens: Iterable[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Alias de nomenclatura para chamadas novas."""
+        return self.fusao_e_deduplicacao(mensagens)
+
+    @staticmethod
+    def _captura_ms(mensagem: dict[str, Any]) -> int:
+        valor = mensagem.get("captured_at", mensagem.get("published_at"))
+        return FiltroRuidoTemporal.timestamp_em_ms(valor)
+
+    # ------------------------------------------------------------------
+    # Agrupamento de quadros e instantes de fusão
+    # ------------------------------------------------------------------
+
+    def _agrupar_instantes_de_fusao(
+        self,
+        quadros: list[dict[str, Any]],
+    ) -> list[list[dict[str, Any]]]:
+        """Agrupa no máximo um quadro por source_id na janela temporal."""
+        por_sessao: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+        for quadro in quadros:
+            capturas = [
+                self._captura_ms(mensagem)
+                for valor in quadro["mensagens"].values()
+                for mensagem in (valor if isinstance(valor, list) else [valor])
+            ]
+            quadro["timestamp_ms"] = min(capturas) if capturas else 0
+            por_sessao[quadro["session_id"]].append(quadro)
+
+        batches: list[list[dict[str, Any]]] = []
+
+        for quadros_sessao in por_sessao.values():
+            pendentes = sorted(
+                quadros_sessao,
+                key=lambda q: (
+                    q["timestamp_ms"],
+                    q["source_id"],
+                    q["frame_index"],
+                ),
+            )
+
+            while pendentes:
+                base = pendentes.pop(0)
+                batch = [base]
+                fontes = {base["source_id"]}
+                restantes: list[dict[str, Any]] = []
+
+                for quadro in pendentes:
+                    delta = quadro["timestamp_ms"] - base["timestamp_ms"]
+
+                    if (
+                        0 <= delta <= self.time_sync_threshold_ms
+                        and quadro["source_id"] not in fontes
+                    ):
+                        batch.append(quadro)
+                        fontes.add(quadro["source_id"])
+                    else:
+                        restantes.append(quadro)
+
+                pendentes = restantes
+                batches.append(
+                    sorted(
+                        batch,
+                        key=lambda q: (q["timestamp_ms"], q["source_id"]),
+                    )
+                )
+
+        return sorted(
+            batches,
+            key=lambda batch: min(q["timestamp_ms"] for q in batch),
+        )
+
+    # ------------------------------------------------------------------
+    # Processamento de cada instante de fusão
+    # ------------------------------------------------------------------
+
+    def _processar_batch(
+        self,
+        batch: list[dict[str, Any]],
+        timestamp_ms: int,
+    ) -> tuple[
+        dict[str, Any],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
+        observacoes: list[dict[str, Any]] = []
+        session_id_batch = batch[0]["session_id"]
+
+        self._expirar_rastros(session_id_batch, timestamp_ms)
+        message_ids: list[str] = []
+
+        for quadro in batch:
+            mensagens = quadro["mensagens"]
+
+            # Sem I2 não há identidade que S2 possa consolidar.
+            if "ods.i2.tracks" not in mensagens:
+                continue
+
+            msg_tracks = mensagens["ods.i2.tracks"]
+            payload_tracks = _payload(msg_tracks)
+            tracks = payload_tracks.get("tracks")
+
+            if not isinstance(tracks, list):
+                raise ValueError(
+                    "ods.i2.tracks exige payload.tracks como array"
+                )
+
+            msg_posicao = mensagens.get("ods.s1.position")
+            posicoes: dict[str, dict[str, Any]] = {}
+
+            if msg_posicao:
+                lista_posicoes = _payload(msg_posicao).get("positions")
+
+                if not isinstance(lista_posicoes, list):
+                    raise ValueError(
+                        "ods.s1.position exige payload.positions como array"
+                    )
+
+                for posicao in lista_posicoes:
+                    if not isinstance(posicao, dict):
+                        raise ValueError(
+                            "Cada item de positions deve ser um object"
+                        )
+
+                    track_id_pos = posicao.get("track_id")
+                    if not isinstance(track_id_pos, str) or not track_id_pos:
+                        raise ValueError(
+                            "positions[].track_id deve ser string não vazia"
+                        )
+
+                    if track_id_pos in posicoes:
+                        raise ValueError(
+                            f"track_id duplicado em ods.s1.position: "
+                            f"{track_id_pos}"
+                        )
+
+                    posicoes[track_id_pos] = posicao
+
+            mensagens_ppe = mensagens.get("ods.i9.ppe_compliance", [])
+            if not isinstance(mensagens_ppe, list):
+                mensagens_ppe = [mensagens_ppe]
+
+            # I9 normativo: uma mensagem por pessoa/detection_id.
+            ppe_por_detection: dict[int, list[dict[str, Any]]] = {}
+
+            for msg_ppe in mensagens_ppe:
+                if (
+                    msg_ppe.get("source_id") != quadro["source_id"]
+                    or msg_ppe.get("session_id") != quadro["session_id"]
+                ):
+                    raise ValueError(
+                        "I9 precisa pertencer à mesma source_id e session_id "
+                        "do quadro agrupado"
+                    )
+
+                payload_ppe = _payload(msg_ppe)
+
+                frame_index_ppe = payload_ppe.get("frame_index")
+                if (
+                    not isinstance(frame_index_ppe, int)
+                    or isinstance(frame_index_ppe, bool)
+                    or frame_index_ppe < 0
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.frame_index "
+                        "integer >= 0"
+                    )
+
+                if frame_index_ppe != quadro["frame_index"]:
+                    raise ValueError(
+                        "I9 precisa pertencer ao mesmo frame_index "
+                        "do quadro agrupado"
+                    )
+
+                bbox_ppe = payload_ppe.get("bbox")
+                if (
+                    not isinstance(bbox_ppe, list)
+                    or len(bbox_ppe) != 4
+                    or any(not _numero_finito(valor) for valor in bbox_ppe)
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.bbox "
+                        "com quatro números finitos"
+                    )
+
+                x_min, y_min, x_max, y_max = bbox_ppe
+                if x_min > x_max or y_min > y_max:
+                    raise ValueError(
+                        "payload.bbox deve respeitar "
+                        "x_min <= x_max e y_min <= y_max"
+                    )
+
+                calibrated_ppe = payload_ppe.get("calibrated")
+                if not isinstance(calibrated_ppe, bool):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.calibrated boolean"
+                    )
+
+                catalog_version_ppe = payload_ppe.get("catalog_version")
+                if (
+                    not isinstance(catalog_version_ppe, str)
+                    or not catalog_version_ppe
+                    or catalog_version_ppe != catalog_version_ppe.strip()
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.catalog_version "
+                        "como string não vazia e sem espaços nas extremidades"
+                    )
+
+                detection_id_ppe = payload_ppe.get("detection_id")
+
+                if (
+                    not isinstance(detection_id_ppe, int)
+                    or isinstance(detection_id_ppe, bool)
+                    or detection_id_ppe < 0
+                ):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige detection_id "
+                        "integer >= 0"
+                    )
+
+                uncertain_payload = payload_ppe.get("uncertain")
+                if not isinstance(uncertain_payload, bool):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.uncertain boolean"
+                    )
+
+                if detection_id_ppe in ppe_por_detection:
+                    raise ValueError(
+                        "Mais de uma mensagem I9 para o mesmo detection_id "
+                        "no mesmo quadro"
+                    )
+
+                itens = payload_ppe.get("items")
+                if not isinstance(itens, list):
+                    raise ValueError(
+                        "ods.i9.ppe_compliance exige payload.items array"
+                    )
+
+                itens_normalizados: list[dict[str, Any]] = []
+
+                for item in itens:
+                    if not isinstance(item, dict):
+                        raise ValueError(
+                            "Cada item de I9 deve ser um object"
+                        )
+
+                    equipamento = item.get("equipment_item")
+                    compliance = item.get("compliance")
+                    confidence = item.get("confidence")
+
+                    if (
+                        not isinstance(equipamento, str)
+                        or not equipamento
+                        or equipamento != equipamento.strip()
+                    ):
+                        raise ValueError(
+                            "items[].equipment_item deve ser string não vazia "
+                            "e sem espaços nas extremidades"
+                        )
+
+                    if (
+                        not isinstance(compliance, str)
+                        or compliance not in COMPLIANCE_VALIDOS
+                    ):
+                        raise ValueError(
+                            f"Compliance inválido para {equipamento!r}: "
+                            f"{compliance!r}"
+                        )
+
+                    if not _numero_finito(confidence) or not 0 <= confidence <= 1:
+                        raise ValueError(
+                            "items[].confidence deve ser number entre 0 e 1"
+                        )
+
+                    itens_normalizados.append(
+                        {
+                            "equipment_item": equipamento,
+                            "compliance": compliance,
+                            "confidence": float(confidence),
+                            "uncertain": uncertain_payload,
+                        }
+                    )
+
+                ppe_por_detection[detection_id_ppe] = itens_normalizados
+
+            session_id = quadro["session_id"]
+            source_id = quadro["source_id"]
+            frame_index = quadro["frame_index"]
+
+            for valor in mensagens.values():
+                lista = valor if isinstance(valor, list) else [valor]
+                message_ids.extend(
+                    mensagem["message_id"] for mensagem in lista
+                )
+
+            track_ids_no_quadro: set[str] = set()
+
+            for track in tracks:
+                if not isinstance(track, dict):
+                    raise ValueError(
+                        "Cada item de tracks deve ser um object"
+                    )
+
+                track_id_valor = track.get("track_id")
+                if not isinstance(track_id_valor, str) or not track_id_valor:
+                    raise ValueError(
+                        "tracks[].track_id deve ser string não vazia"
+                    )
+
+                if track_id_valor in track_ids_no_quadro:
+                    raise ValueError(
+                        f"track_id duplicado no quadro: {track_id_valor}"
+                    )
+                track_ids_no_quadro.add(track_id_valor)
+
+                state = track.get("state")
+                if state not in ESTADOS_RASTRO_VALIDOS:
+                    raise ValueError(
+                        f"tracks[].state inválido: {state!r}"
+                    )
+
+                predicted = track.get("predicted")
+                if not isinstance(predicted, bool):
+                    raise ValueError(
+                        "tracks[].predicted deve ser boolean"
+                    )
+
+                track_id = track_id_valor
+                key_rastro = (session_id, source_id, track_id)
+
+                if state == "LOST":
+                    self._remover_rastro_local(key_rastro)
+                    continue
+
+                detection_id = track.get("detection_id")
+
+                if predicted:
+                    if detection_id is not None:
+                        raise ValueError(
+                            "Um rastro predicted não deve possuir detection_id"
+                        )
+                elif detection_id is not None and (
+                    not isinstance(detection_id, int)
+                    or isinstance(detection_id, bool)
+                    or detection_id < 0
+                ):
+                    raise ValueError(
+                        "tracks[].detection_id deve ser integer >= 0"
+                    )
+
+
+                posicao = posicoes.get(track_id, {})
+
+                point_px = _par_numerico(
+                    posicao.get("point_px", track.get("point_px")),
+                    "point_px",
+                )
+
+                if point_px is None and track.get("bbox") is not None:
+                    bbox = track["bbox"]
+                    if (
+                        not isinstance(bbox, list)
+                        or len(bbox) != 4
+                        or not all(_numero_finito(v) for v in bbox)
+                    ):
+                        raise ValueError(
+                            "tracks[].bbox deve ser [x_min,y_min,x_max,y_max]"
+                        )
+                    x_min, y_min, x_max, y_max = map(float, bbox)
+                    if x_max < x_min or y_max < y_min:
+                        raise ValueError("tracks[].bbox possui limites inválidos")
+                    point_px = [
+                        (x_min + x_max) / 2,
+                        y_max,
+                    ]
+
+                position_m = _par_numerico(
+                    posicao.get("position_m"),
+                    "position_m",
+                )
+                space_id = posicao.get("space_id")
+
+                if position_m is not None:
+                    if not isinstance(space_id, str) or not space_id.strip():
+                        raise ValueError(
+                            "position_m exige space_id string não vazia"
+                        )
+                elif space_id is not None:
+                    raise ValueError(
+                        "space_id não deve aparecer sem position_m"
+                    )
+
+                zone_ids = _validar_lista_strings(
+                    posicao.get("zone_ids", []),
+                    "positions[].zone_ids",
+                )
+
+                confidence = track.get("confidence")
+                if not _numero_finito(confidence) or not 0 <= confidence <= 1:
+                    raise ValueError(
+                        "tracks[].confidence deve ser number entre 0 e 1"
+                    )
+
+                classe = track.get("class")
+                if not isinstance(classe, str) or not classe.strip():
+                    raise ValueError(
+                        "tracks[].class deve ser string não vazia"
+                    )
+
+                entity_id = self._entity_para_rastro(
+                    session_id,
+                    source_id,
+                    track_id,
+                )
+
+                self.atualizar_estado_memoria(
+                    {
+                        "session_id": session_id,
+                        "source_id": source_id,
+                        **track,
+                    }
+                )
+
+                captura_track_ms = self._captura_ms(msg_tracks)
+                self._ultima_observacao_rastro[key_rastro] = captura_track_ms
+
+                # PPE só é válido quando avaliado pelo I9 no quadro atual.
+                ppe_observado = (
+                    [
+                        dict(item)
+                        for item in ppe_por_detection.get(detection_id, [])
+                    ]
+                    if not predicted and detection_id is not None
+                    else []
+                )
+
+                observacoes.append(
+                    {
+                        "session_id": session_id,
+                        "source_id": source_id,
+                        "track_id": track_id,
+                        "track_key": key_rastro,
+                        "global_id": entity_id,
+                        "class": classe,
+                        "confidence": float(confidence),
+                        "frame_index": frame_index,
+                        "timestamp_ms": captura_track_ms,
+                        "point_px": point_px,
+                        "position_m": position_m,
+                        "space_id": space_id,
+                        "zone_ids": zone_ids,
+                        "ppe": ppe_observado,
+                        "predicted": predicted,
+                        "message_id": msg_tracks["message_id"],
+                    }
+                )
+
+        clusters = self._clusterizar_observacoes(
+            observacoes,
+            timestamp_ms,
+        )
+        entidades = [
+            self._montar_entidade(cluster)
+            for cluster in clusters
+        ]
+
+        self._atualizar_historico_entidades(
+            entidades,
+            observacoes,
+            timestamp_ms,
+        )
+
+        fontes = sorted({obs["source_id"] for obs in observacoes})
+        fonte_principal = fontes[0] if fontes else batch[0]["source_id"]
+
+        msg_out = self._envelope_evento(
+            "ods.s2.entity",
+            session_id_batch,
+            timestamp_ms,
+            fonte_principal,
+            ARTIFACT_VERSION_FUSAO,
+            message_ids[0] if message_ids else None,
+        )
+        msg_out["payload"] = {"entities": entidades}
+
+        return msg_out, entidades, observacoes
+
+    def _remover_rastro_local(
+        self,
+        chave: tuple[str, str, str],
+    ) -> None:
+        """Remove o vínculo local de um rastro encerrado por I2."""
+        self._ultima_observacao_rastro.pop(chave, None)
+        self._track_to_entity.pop(chave, None)
+
+        chave_memoria = f"{chave[0]}:{chave[1]}:{chave[2]}"
+        self.estado_em_memoria.pop(chave_memoria, None)
+
+    # ------------------------------------------------------------------
+    # Fusão e reidentificação
+    # ------------------------------------------------------------------
+
+
+    @staticmethod
+    def _estados_da_condicao(
+        estado: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Retorna o estado principal e os eventos adicionais associados."""
+        adicionais = estado.get("_eventos_adicionais", [])
+        return [estado, *adicionais]
+
+    def _mesclar_estados_condicao(
+        self,
+        estado_a: dict[str, Any],
+        estado_b: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Preserva eventos ativos quando duas condições passam a colidir."""
+        candidatos: list[dict[str, Any]] = []
+        vistos: set[int] = set()
+
+        for estado in (estado_a, estado_b):
+            for candidato in self._estados_da_condicao(estado):
+                identidade = id(candidato)
+
+                if identidade in vistos:
+                    continue
+
+                vistos.add(identidade)
+                candidato.pop("_eventos_adicionais", None)
+                candidatos.append(candidato)
+
+        ativos = [
+            estado
+            for estado in candidatos
+            if estado.get("event_id") is not None
+        ]
+
+        if ativos:
+            ativos.sort(
+                key=lambda estado: estado.get("first_seen_ms", 0)
+            )
+            principal = ativos[0]
+            principal["_eventos_adicionais"] = ativos[1:]
+            return principal
+
+        principal = min(
+            candidatos,
+            key=lambda estado: estado.get("first_seen_ms", 0),
+        )
+
+        principal["first_seen_ms"] = min(
+            estado.get("first_seen_ms", principal["first_seen_ms"])
+            for estado in candidatos
+        )
+
+        principal["last_seen_ms"] = max(
+            estado.get("last_seen_ms", principal["last_seen_ms"])
+            for estado in candidatos
+        )
+
+        mais_recente = max(
+            candidatos,
+            key=lambda estado: estado.get("last_seen_ms", 0),
+        )
+        principal["contexto"] = dict(mais_recente.get("contexto", {}))
+
+        return principal
+
+
+    
+    def _consolidar_ids_entidade(
+        self,
+        ids: set[str],
+    ) -> str:
+        """Escolhe um ID canônico e migra os estados associados."""
+        if not ids:
+            raise ValueError("Não é possível consolidar conjunto vazio de IDs")
+
+        canonico = sorted(ids)[0]
+        antigos = ids - {canonico}
+
+        for antigo in antigos:
+            estado_antigo = self._estado_entidades.pop(antigo, None)
+            estado_canonico = self._estado_entidades.get(canonico)
+
+            if estado_antigo and estado_canonico is None:
+                self._estado_entidades[canonico] = estado_antigo
+
+            for chave, valor in list(self._track_to_entity.items()):
+                if valor == antigo:
+                    self._track_to_entity[chave] = canonico
+
+            for chave, estado in list(self._condicoes.items()):
+                if antigo not in chave[2:]:
+                    continue
+
+                nova_chave = tuple(
+                    canonico if parte == antigo else parte
+                    for parte in chave
+                )
+
+                existente = self._condicoes.get(nova_chave)
+
+                if existente is None:
+                    self._condicoes[nova_chave] = estado
+                else:
+                    self._condicoes[nova_chave] = (
+                        self._mesclar_estados_condicao(
+                            existente,
+                            estado,
+                        )
+                    )
+
+                if nova_chave != chave:
+                    self._condicoes.pop(chave, None)
+
+                # Migra persistência e debounce para a chave canônica.
+                for mapa, combinar in (
+                    (
+                        self.filtro_temporal.inicio_condicao,
+                        min,
+                    ),
+                    (
+                        self.filtro_temporal.ultimo_visto,
+                        max,
+                    ),
+                ):
+                    if chave not in mapa:
+                        continue
+
+                    instante = mapa.pop(chave)
+
+                    if nova_chave in mapa:
+                        mapa[nova_chave] = combinar(
+                            mapa[nova_chave],
+                            instante,
+                        )
+                    else:
+                        mapa[nova_chave] = instante
+
+            for chave, timestamp in list(
+                self._ultima_observacao_entidade.items()
+            ):
+                if chave[1] == antigo:
+                    nova_chave = (chave[0], canonico)
+                    self._ultima_observacao_entidade[nova_chave] = max(
+                        timestamp,
+                        self._ultima_observacao_entidade.get(nova_chave, 0),
+                    )
+                    self._ultima_observacao_entidade.pop(chave, None)
+
+        return canonico
+
+   
+    def _clusterizar_observacoes(
+        self,
+        observacoes: list[dict[str, Any]],
+        timestamp_ms: int,
+    ) -> list[list[dict[str, Any]]]:
+        clusters: list[list[dict[str, Any]]] = []
+
+        ordenadas = sorted(
+            observacoes,
+            key=lambda obs: (
+                obs["timestamp_ms"],
+                obs["source_id"],
+                obs["track_id"],
+            ),
+        )
+
+        for obs in ordenadas:
+            melhor_encaixe: list[dict[str, Any]] | None = None
+            menor_distancia = float("inf")
+
+            if obs.get("position_m") is not None and obs.get("space_id"):
+                for cluster in clusters:
+                    if any(
+                        item["source_id"] == obs["source_id"]
+                        for item in cluster
+                    ):
+                        continue
+
+                    if any(
+                        item.get("class") != obs.get("class")
+                        for item in cluster
+                    ):
+                        continue
+
+                    for referencia in cluster:
+                        if (
+                            referencia.get("position_m") is None
+                            or referencia.get("space_id") != obs["space_id"]
+                        ):
+                            continue
+
+                        delta_t = abs(
+                            obs["timestamp_ms"] - referencia["timestamp_ms"]
+                        )
+                        if delta_t > self.time_sync_threshold_ms:
+                            continue
+
+                        x1, y1 = obs["position_m"]
+                        x2, y2 = referencia["position_m"]
+                        distancia = math.hypot(x1 - x2, y1 - y2)
+
+                        if (
+                            distancia <= self.merge_distance_threshold
+                            and distancia < menor_distancia
+                        ):
+                            menor_distancia = distancia
+                            melhor_encaixe = cluster
+
+            # Este bloco fica fora dos loops de busca.
+            if melhor_encaixe is None:
+                clusters.append([obs])
+            else:
+                melhor_encaixe.append(obs)
+
+        # Consolida IDs quando rastros de fontes diferentes foram fundidos.
+        for cluster in clusters:
+            if len(cluster) > 1:
+                ids = {obs["global_id"] for obs in cluster}
+                canonico = self._consolidar_ids_entidade(ids)
+
+                for obs in cluster:
+                    obs["global_id"] = canonico
+                    self._track_to_entity[obs["track_key"]] = canonico
+
+        ids_ativos = {
+            obs["global_id"]
+            for cluster in clusters
+            for obs in cluster
+        }
+        ids_reutilizados: set[str] = set()
+
+        # Reidentificação histórica: métrica no mesmo espaço ou pixel
+        # somente dentro da mesma câmera.
+        for cluster in clusters:
+            ids_cluster = {obs["global_id"] for obs in cluster}
+
+            if any(
+                entity_id in self._estado_entidades
+                for entity_id in ids_cluster
+            ):
+                continue
+
+            melhor: tuple[float, str] | None = None
+            session_id_cluster = cluster[0]["session_id"]
+
+            for entity_id, anterior in self._estado_entidades.items():
+                if anterior.get("session_id") != session_id_cluster:
+                    continue
+                if entity_id in ids_ativos or entity_id in ids_reutilizados:
+                    continue
+
+                delta_t = timestamp_ms - int(anterior["last_seen_ms"])
+                if delta_t < 0 or delta_t > self.ttl_threshold_ms:
+                    continue
+
+                for obs in cluster:
+                    if (
+                        anterior.get("class")
+                        and obs.get("class") != anterior.get("class")
+                    ):
+                        continue
+
+                    # Entre câmeras, respeitar a janela de sincronismo.
+                    # Na mesma câmera, preservar a reidentificação pelo TTL.
+                    if (
+                        anterior.get("source_id") is not None
+                        and obs["source_id"] != anterior.get("source_id")
+                        and abs(
+                            obs["timestamp_ms"]
+                            - int(anterior["last_seen_ms"])
+                        ) > self.time_sync_threshold_ms
+                    ):
+                        continue
+
+                    distancia: float | None = None
+                    limite: float
+
+                    if (
+                        obs.get("position_m") is not None
+                        and anterior.get("position_m") is not None
+                        and obs.get("space_id") == anterior.get("space_id")
+                        and obs.get("space_id") is not None
+                    ):
+                        a = obs["position_m"]
+                        b = anterior["position_m"]
+                        distancia = math.hypot(
+                            a[0] - b[0],
+                            a[1] - b[1],
+                        )
+                        limite = self.merge_distance_threshold
+
+                    elif (
+                        obs.get("point_px") is not None
+                        and anterior.get("point_px") is not None
+                        and obs.get("source_id") == anterior.get("source_id")
+                        and obs.get("position_m") is None
+                        and anterior.get("position_m") is None
+                    ):
+                        a = obs["point_px"]
+                        b = anterior["point_px"]
+                        distancia = math.hypot(
+                            a[0] - b[0],
+                            a[1] - b[1],
+                        )
+                        limite = float(REIDENTIFICACAO_PIXELS)
+
+                    else:
+                        continue
+
+                    if distancia <= limite and (
+                        melhor is None or distancia < melhor[0]
+                    ):
+                        melhor = (distancia, entity_id)
+
+            if melhor is not None:
+                entity_id = melhor[1]
+                ids_reutilizados.add(entity_id)
+
+                for obs in cluster:
+                    obs["global_id"] = entity_id
+                    self._track_to_entity[obs["track_key"]] = entity_id
+
+        return clusters
+
+    # ------------------------------------------------------------------
+    # Construção e histórico de entidades
+    # ------------------------------------------------------------------
+
+    def _atualizar_historico_entidades(
+        self,
+        entidades: list[dict[str, Any]],
+        observacoes: list[dict[str, Any]],
+        timestamp_ms: int,
+    ) -> None:
+        por_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+        for obs in observacoes:
+            por_id[obs["global_id"]].append(obs)
+
+        for entidade in entidades:
+            entity_id = entidade["entity_id"]
+            obs_entidade = por_id.get(entity_id, [])
+            referencia = obs_entidade[0] if obs_entidade else {}
+
+            self._estado_entidades[entity_id] = {
+                "session_id": (
+                    referencia.get("session_id") if referencia else None
+                ),
+                "last_seen_ms": timestamp_ms,
+                "class": entidade.get("class"),
+                "position_m": entidade.get("position_m"),
+                "space_id": entidade.get("space_id"),
+                "point_px": entidade.get("point_px"),
+                "source_id": referencia.get("source_id"),
+                "zone_ids": entidade.get("zone_ids", []),
+            }
+
+    def _montar_entidade(
+        self,
+        cluster: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        fontes = sorted({obs["source_id"] for obs in cluster})
+        zonas = sorted(
+            {
+                zona
+                for obs in cluster
+                for zona in obs.get("zone_ids", [])
+            }
+        )
+
+        entidade: dict[str, Any] = {
+            "entity_id": cluster[0]["global_id"],
+            "class": next(
+                (
+                    obs["class"]
+                    for obs in cluster
+                    if obs.get("class")
+                ),
+                "unknown",
+            ),
+            "zone_ids": zonas,
+            "source_ids": fontes,
+            "track_refs": [
+                {
+                    "source_id": obs["source_id"],
+                    "track_id": obs["track_id"],
+                }
+                for obs in sorted(
+                    cluster,
+                    key=lambda obs: (
+                        obs["source_id"],
+                        obs["track_id"],
+                    ),
+                )
+            ],
+        }
+
+        metricas = [
+            obs
+            for obs in cluster
+            if obs.get("position_m") is not None
+            and obs.get("space_id")
+        ]
+        spaces = {obs["space_id"] for obs in metricas}
+
+        if metricas and len(spaces) == 1:
+            entidade["position_m"] = [
+                round(
+                    sum(obs["position_m"][i] for obs in metricas)
+                    / len(metricas),
+                    3,
+                )
+                for i in (0, 1)
+            ]
+            entidade["space_id"] = next(iter(spaces))
+
+        elif len(fontes) == 1:
+            point = next(
+                (
+                    obs.get("point_px")
+                    for obs in cluster
+                    if obs.get("point_px") is not None
+                ),
+                None,
+            )
+            if point is not None:
+                entidade["point_px"] = [
+                    round(point[0]),
+                    round(point[1]),
+                ]
+
+        # Não publica ponto em pixels quando a entidade contém várias fontes.
+        if len(fontes) > 1 and "position_m" not in entidade:
+            entidade.pop("point_px", None)
+
+        # Consolida o último estado de EPI por item.
+        ppe: dict[str, dict[str, Any]] = {}
+
+        for obs in sorted(
+            cluster,
+            key=lambda item: item["timestamp_ms"],
+        ):
+            for item in obs.get("ppe", []):
+                equipamento = item.get("equipment_item")
+                if equipamento:
+                    ppe[str(equipamento)] = {
+                        "equipment_item": str(equipamento),
+                        "compliance": item.get("compliance"),
+                        "confidence": float(item.get("confidence", 0.0)),
+                    }
+
+        if ppe:
+            entidade["ppe"] = list(ppe.values())
+
+        return entidade
+
+    # ------------------------------------------------------------------
+    # Avaliação das regras
+    # ------------------------------------------------------------------
+
+    def _avaliar_regras_por_entidade(
+        self,
+        entidades: list[dict[str, Any]],
+        observacoes: list[dict[str, Any]],
+        batch: list[dict[str, Any]],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
+        saida: list[dict[str, Any]] = []
+        observacoes_por_entity: dict[
+            str, list[dict[str, Any]]
+        ] = defaultdict(list)
+
+        for obs in observacoes:
+            observacoes_por_entity[obs["global_id"]].append(obs)
+
+        session_id = batch[0]["session_id"]
+
+        for entidade in entidades:
+            entity_id = entidade["entity_id"]
+            obs_entity = observacoes_por_entity.get(entity_id, [])
+
+            self._ultima_observacao_entidade[
+                (session_id, entity_id)
+            ] = timestamp_ms
+
+            for regra in self.regras:
+                tipo = regra["event_type"]
+                classe_ok = (
+                    not regra.get("class")
+                    or entidade.get("class") == regra.get("class")
+                )
+                zona_regra = regra.get("zone_id")
+                zonas = entidade.get("zone_ids", [])
+                zona_ok = not zona_regra or zona_regra in zonas
+
+                context_base = {
+                    "entity_id": entity_id,
+                    "class": entidade.get("class"),
+                    "zone_id": (
+                        zona_regra
+                        or (zonas[0] if len(zonas) == 1 else None)
+                    ),
+                    "source_ids": entidade.get("source_ids", []),
+                    "message_id": (
+                        obs_entity[0]["message_id"]
+                        if obs_entity
+                        else None
+                    ),
+                    "confidence": min(
+                        (obs["confidence"] for obs in obs_entity),
+                        default=1.0,
+                    ),
+                }
+
+                
+                if tipo == "PPE_NON_COMPLIANT":
+                    equipamento_regra = regra.get("equipment_item")
+
+                    # Mantém as avaliações de I9 separadas por zona.
+                    ppe_por_zona: dict[
+                        Any, dict[str, dict[str, Any]]
+                    ] = defaultdict(dict)
+
+                    for obs in obs_entity:
+                        zonas_obs = obs.get("zone_ids", []) or [None]
+
+                        for zona_obs in zonas_obs:
+                            for item in obs.get("ppe", []):
+                                equipamento = item.get("equipment_item")
+                                if equipamento:
+                                    ppe_por_zona[zona_obs][equipamento] = (
+                                        dict(item)
+                                    )
+
+                    # Recupera zonas com condições ativas para encerrá-las
+                    # quando a entidade sair delas.
+                    zonas_ativas = {
+                        chave[3]
+                        for chave in self._condicoes
+                        if (
+                            len(chave) >= 5
+                            and chave[0] == session_id
+                            and chave[1] == regra["rule_id"]
+                            and chave[2] == entity_id
+                        )
+                    }
+
+                    if zona_regra:
+                        zonas_avaliadas = [zona_regra]
+                    else:
+                        zonas_avaliadas = list(
+                            dict.fromkeys([*zonas, *zonas_ativas])
+                        )
+
+                        if not zonas_avaliadas and equipamento_regra:
+                            zonas_avaliadas = [None]
+
+                    for zona in zonas_avaliadas:
+                        ppe_por_item = ppe_por_zona.get(zona, {})
+
+                        if equipamento_regra:
+                            equipamentos = [equipamento_regra]
+                        elif self.catalog_version_ppe is not None:
+                            equipamentos = self.ppe_required_by_zone.get(
+                                zona, []
+                            )
+                        else:
+                            equipamentos = list(ppe_por_item)
+
+                        for equipamento in equipamentos:
+                            ppe = ppe_por_item.get(equipamento)
+
+                            compliance = (
+                                ppe.get("compliance")
+                                if ppe is not None
+                                else None
+                            )
+
+                            confidence = (
+                                float(ppe.get("confidence", 0.0))
+                                if ppe is not None
+                                else float(context_base["confidence"])
+                            )
+
+                            condicao = (
+                                ppe is not None
+                                and compliance in {"ABSENT", "INCORRECT"}
+                                and classe_ok
+                                and zona_ok
+                            )
+
+                            contexto = {
+                                **context_base,
+                                "zone_id": zona,
+                                "equipment_item": equipamento,
+                                "confidence": confidence,
+                                "details": {
+                                    "compliance": compliance,
+                                    "min_duration_ms": regra[
+                                        "min_duration_ms"
+                                    ],
+                                },
+                                "uncertain": (
+                                    ppe.get("uncertain") is True
+                                    if ppe is not None
+                                    else False
+                                ),
+                            }
+
+                            saida.extend(
+                                self._atualizar_condicao(
+                                    regra,
+                                    (entity_id, zona, equipamento),
+                                    condicao,
+                                    timestamp_ms,
+                                    contexto,
+                                    session_id,
+                                )
+                            )
+
+                elif tipo == "DWELL_EXCEEDED":
+                    if not classe_ok:
+                        continue
+
+                    zonas_avaliadas = (
+                        [zona_regra] if zona_regra else zonas
+                    )
+
+                    for zona in zonas_avaliadas:
+                        if not zona:
+                            continue
+
+                        chave_zona = (
+                            session_id,
+                            f"{entity_id}:{zona}",
+                        )
+
+                        if zona in zonas:
+                            inicio = self._inicio_zona.setdefault(
+                                chave_zona,
+                                timestamp_ms,
+                            )
+                            threshold_ms = int(
+                                float(regra.get("threshold", 0)) * 1000
+                            )
+                            duracao_zona = max(
+                                0,
+                                timestamp_ms - inicio,
+                            )
+                            condicao = duracao_zona >= threshold_ms
+                        else:
+                            condicao = False
+                            inicio = timestamp_ms
+                            duracao_zona = 0
+                            self._inicio_zona.pop(chave_zona, None)
+
+                        contexto = {
+                            **context_base,
+                            "zone_id": zona,
+                            "details": {
+                                "dwell_s": int(duracao_zona // 1000)
+                            },
+                        }
+
+                        saida.extend(
+                            self._atualizar_condicao(
+                                regra,
+                                (entity_id, zona),
+                                condicao,
+                                timestamp_ms,
+                                contexto,
+                                session_id,
+                            )
+                        )
+
+                elif tipo == "OBJECT_STATIONARY":
+                    if not classe_ok or not zona_ok:
+                        continue
+
+                    localizacao = (
+                        entidade.get("position_m")
+                        or entidade.get("point_px")
+                    )
+
+                    if (
+                        localizacao is None
+                        or regra.get("threshold") is None
+                    ):
+                        continue
+
+                    unidade = (
+                        "m" if entidade.get("position_m") is not None else "px"
+                    )
+                    chave_posicao = (session_id, entity_id)
+                    atual_x = float(localizacao[0])
+                    atual_y = float(localizacao[1])
+                    base = self._posicao_base.get(chave_posicao)
+
+                    if base is None or base[3] != unidade:
+                        self._posicao_base[chave_posicao] = (
+                            timestamp_ms,
+                            atual_x,
+                            atual_y,
+                            unidade,
+                        )
+                        deslocamento = 0.0
+                        duracao = 0
+                    else:
+                        inicio, x0, y0, _ = base
+                        deslocamento = math.hypot(
+                            atual_x - x0,
+                            atual_y - y0,
+                        )
+                        duracao = max(0, timestamp_ms - inicio)
+
+                        if deslocamento > float(regra["threshold"]):
+                            self._posicao_base[chave_posicao] = (
+                                timestamp_ms,
+                                atual_x,
+                                atual_y,
+                                unidade,
+                            )
+                            duracao = 0
+
+                    condicao = (
+                        deslocamento <= float(regra["threshold"])
+                        and duracao >= int(regra["min_duration_ms"])
+                    )
+
+                    contexto = {
+                        **context_base,
+                        "details": {
+                            f"displacement_{unidade}": round(
+                                deslocamento,
+                                3,
+                            )
+                        },
+                    }
+
+                    saida.extend(
+                        self._atualizar_condicao(
+                            regra,
+                            (entity_id,),
+                            condicao,
+                            timestamp_ms,
+                            contexto,
+                            session_id,
+                            persistencia_override_ms=0,
+                        )
+                    )
+
+                elif tipo == "CROSS_CAMERA_MATCH":
+                    condicao = (
+                        classe_ok
+                        and len(entidade.get("source_ids", [])) >= 2
+                    )
+
+                    chave_condicao = (
+                        session_id,
+                        regra["rule_id"],
+                        entity_id,
+                    )
+                    estado_match = self._condicoes.get(chave_condicao)
+
+                    estados_match = (
+                        self._estados_da_condicao(estado_match)
+                        if estado_match is not None
+                        else []
+                    )
+
+                    dentro_ttl = any(
+                        timestamp_ms - int(
+                            item.get("last_seen_ms", timestamp_ms)
+                        ) <= self.ttl_threshold_ms
+                        for item in estados_match
+                    )
+
+                    if condicao or not dentro_ttl:
+                        contexto = {
+                            **context_base,
+                            "details": {
+                                "source_ids": entidade.get("source_ids", [])
+                            },
+                        }
+
+                        saida.extend(
+                            self._atualizar_condicao(
+                                regra,
+                                (entity_id,),
+                                condicao,
+                                timestamp_ms,
+                                contexto,
+                                session_id,
+                            )
+                        )
+
+        return saida
+
+    # ------------------------------------------------------------------
+    # Persistência, debounce e emissão de eventos
+    # ------------------------------------------------------------------
+
+    
+    
+    def _atualizar_condicao(
+        self,
+        regra: dict[str, Any],
+        identidade: tuple[Any, ...],
+        ativa: bool,
+        timestamp_ms: int,
+        contexto: dict[str, Any],
+        session_id: str,
+        persistencia_override_ms: int | None = None,
+    ) -> list[dict[str, Any]]:
+        rule_id = regra["rule_id"]
+        chave = (session_id, rule_id, *identidade)
+        saida: list[dict[str, Any]] = []
+
+        estado = self._condicoes.get(chave)
+        estados = (
+            self._estados_da_condicao(estado)
+            if estado is not None
+            else []
+        )
+
+        if not ativa:
+            for item in estados:
+                if item.get("event_id"):
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            item,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            item.get("contexto", contexto),
+                        )
+                    )
+
+            self._condicoes.pop(chave, None)
+            self.filtro_temporal.atualizar_persistencia(
+                chave, False, timestamp_ms, 0
+            )
+            self.filtro_temporal.ultimo_visto.pop(chave, None)
+            return saida
+
+        confidence = float(contexto.get("confidence", 1.0))
+
+        if confidence < float(regra["min_confidence"]):
+            if regra.get("event_type") == "CROSS_CAMERA_MATCH":
+                for item in estados:
+                    if item.get("event_id"):
+                        saida.append(
+                            self._emitir_evento(
+                                regra,
+                                item,
+                                "ENDED",
+                                timestamp_ms,
+                                session_id,
+                                item.get("contexto", contexto),
+                            )
+                        )
+
+                self._condicoes.pop(chave, None)
+                self.filtro_temporal.atualizar_persistencia(
+                    chave, False, timestamp_ms, 0
+                )
+                self.filtro_temporal.ultimo_visto.pop(chave, None)
+
+            return saida
+
+        if estado is None:
+            estado = {
+                "first_seen_ms": timestamp_ms,
+                "last_seen_ms": timestamp_ms,
+                "last_emitted_ms": None,
+                "event_id": None,
+                "contexto": dict(contexto),
+            }
+            self._condicoes[chave] = estado
+            estados = [estado]
+        else:
+            for item in estados:
+                item["last_seen_ms"] = timestamp_ms
+                item["contexto"] = dict(contexto)
+
+        min_duration = int(
+            regra["min_duration_ms"]
+            if persistencia_override_ms is None
+            else persistencia_override_ms
+        )
+
+        persistiu, _ = self.filtro_temporal.atualizar_persistencia(
+            chave,
+            True,
+            timestamp_ms,
+            min_duration,
+        )
+
+        eventos_ativos = [
+            item for item in estados if item.get("event_id")
+        ]
+
+        if not eventos_ativos and persistiu:
+            if self.filtro_temporal.aplicar_debounce(
+                chave,
+                timestamp_ms,
+                int(regra["debounce_ms"]),
+            ):
+                estado["event_id"] = str(uuid.uuid4())
+                estado["last_emitted_ms"] = timestamp_ms
+
+                saida.append(
+                    self._emitir_evento(
+                        regra,
+                        estado,
+                        "STARTED",
+                        timestamp_ms,
+                        session_id,
+                        contexto,
+                    )
+                )
+        else:
+            debounce_ms = int(regra["debounce_ms"])
+
+            for item in eventos_ativos:
+                ultimo = item.get("last_emitted_ms")
+
+                if ultimo is not None and (
+                    timestamp_ms < ultimo
+                    or timestamp_ms - ultimo < debounce_ms
+                ):
+                    continue
+
+                item["last_emitted_ms"] = timestamp_ms
+
+                saida.append(
+                    self._emitir_evento(
+                        regra,
+                        item,
+                        "UPDATED",
+                        timestamp_ms,
+                        session_id,
+                        item.get("contexto", contexto),
+                    )
+                )
+
+        return saida
+
+    def _emitir_evento(
+        self,
+        regra: dict[str, Any],
+        estado: dict[str, Any],
+        phase: str,
+        timestamp_ms: int,
+        session_id: str,
+        contexto: dict[str, Any],
+    ) -> dict[str, Any]:
+        confidence = min(
+            1.0,
+            max(0.0, float(contexto.get("confidence", 1.0))),
+        )
+
+        status = (
+            "UNCERTAIN"
+            if (
+                contexto.get("uncertain") is True
+                or confidence < float(regra["uncertain_below"])
+            )
+            else "CONFIRMED"
+        )
+
+        fontes = sorted(set(contexto.get("source_ids") or []))
+        fonte = fontes[0] if fontes else None
+
+        mensagem = self._envelope_evento(
+            "ods.s2.event",
+            session_id,
+            timestamp_ms,
+            fonte,
+            self.artifact_version_regras,
+            contexto.get("message_id"),
+        )
+
+        payload: dict[str, Any] = {
+            "event_id": estado["event_id"],
+            "event_type": regra["event_type"],
+            "rule_id": regra["rule_id"],
+            "status": status,
+            "phase": phase,
+            "confidence": round(confidence, 4),
+        }
+
+        for campo in (
+            "entity_id",
+            "class",
+            "zone_id",
+            "equipment_item",
+        ):
+            if contexto.get(campo) is not None:
+                payload[campo] = contexto[campo]
+
+        payload["started_at"] = _iso_de_ms(
+            int(estado["first_seen_ms"])
+        )
+        payload["duration_ms"] = max(
+            0,
+            timestamp_ms - int(estado["first_seen_ms"]),
+        )
+        payload["source_ids"] = fontes
+
+        details = contexto.get("details")
+        if isinstance(details, dict) and details:
+            payload["details"] = details
+
+        mensagem["payload"] = payload
+        return mensagem
+
+    # ------------------------------------------------------------------
+    # Transição de zona
+    # ------------------------------------------------------------------
+
+    def _processar_transicao_zona(
+        self,
+        mensagem: dict[str, Any],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
+        payload = _payload(mensagem)
+        transicao = payload.get("transition")
+        zona = payload.get("zone_id")
+        source_id = mensagem.get("source_id")
+        session_id = mensagem["session_id"]
+        track_id = payload.get("track_id")
+        classe = payload.get("class")
+
+        if (
+            transicao not in {"ENTER", "EXIT"}
+            or not isinstance(zona, str)
+            or not zona
+            or not isinstance(track_id, str)
+            or not track_id
+            or not isinstance(source_id, str)
+            or not source_id
+            or not isinstance(classe, str)
+            or not classe
+        ):
+            raise ValueError(
+                "ods.s1.zone_transition exige source_id, track_id, class, "
+                "zone_id e transition ENTER/EXIT válidos"
+            )
+
+        # entered_at é obrigatório tanto em ENTER quanto em EXIT no
+        # contrato 6c. Em ENTER, deve representar o próprio captured_at.
+        entered_at = payload.get("entered_at")
+        if entered_at is None:
+            raise ValueError(
+                "ods.s1.zone_transition exige payload.entered_at"
+            )
+        entered_at_ms = FiltroRuidoTemporal.timestamp_em_ms(entered_at)
+
+        if transicao == "ENTER" and entered_at_ms != timestamp_ms:
+            raise ValueError(
+                "Em transition=ENTER, entered_at deve ser igual a captured_at"
+            )
+
+        if transicao == "EXIT":
+            dwell_s = payload.get("dwell_s")
+            if (
+                not isinstance(dwell_s, int)
+                or isinstance(dwell_s, bool)
+                or dwell_s < 0
+            ):
+                raise ValueError(
+                    "ods.s1.zone_transition EXIT exige dwell_s integer >= 0"
+                )
+
+        chave_rastro = (session_id, source_id, track_id)
+
+        # S1 não pode criar identidade. Só processa rastros já conhecidos
+        # por I2 nesta sessão e nesta câmera.
+        entity_id = self._track_to_entity.get(chave_rastro)
+        if entity_id is None:
+            return []
+
+        self._ultima_observacao_rastro[chave_rastro] = max(
+            timestamp_ms,
+            self._ultima_observacao_rastro.get(chave_rastro, timestamp_ms),
+        )
+
+        fontes = [source_id]
+        saida: list[dict[str, Any]] = []
+
+        for regra in self.regras:
+            tipo = regra["event_type"]
+
+            if tipo not in {"ZONE_ENTER", "ZONE_EXIT"}:
+                continue
+            if regra.get("class") and regra["class"] != classe:
+                continue
+            if regra.get("zone_id") and regra["zone_id"] != zona:
+                continue
+
+            contexto = {
+                "entity_id": entity_id,
+                "class": classe,
+                "zone_id": zona,
+                "source_ids": fontes,
+                "message_id": mensagem["message_id"],
+                "confidence": 1.0,
+                "details": {},
+            }
+
+            if tipo == "ZONE_ENTER" and transicao == "ENTER":
+                saida.extend(
+                    self._atualizar_condicao(
+                        regra,
+                        (entity_id, zona),
+                        True,
+                        timestamp_ms,
+                        contexto,
+                        session_id,
+                        persistencia_override_ms=0,
+                    )
+                )
+
+            elif tipo == "ZONE_ENTER" and transicao == "EXIT":
+                saida.extend(
+                    self._atualizar_condicao(
+                        regra,
+                        (entity_id, zona),
+                        False,
+                        timestamp_ms,
+                        contexto,
+                        session_id,
+                    )
+                )
+
+            elif tipo == "ZONE_EXIT" and transicao == "EXIT":
+                # ZONE_EXIT representa a ocorrência do cruzamento.
+                eventos_start = self._atualizar_condicao(
+                    regra,
+                    (entity_id, zona),
+                    True,
+                    timestamp_ms,
+                    contexto,
+                    session_id,
+                    persistencia_override_ms=0,
+                )
+                saida.extend(eventos_start)
+
+                chave_condicao = (
+                    session_id,
+                    regra["rule_id"],
+                    entity_id,
+                    zona,
+                )
+                estado = self._condicoes.get(chave_condicao)
+
+                if estado:
+                    for item in self._estados_da_condicao(estado):
+                        if item.get("event_id"):
+                            saida.append(
+                                self._emitir_evento(
+                                    regra,
+                                    item,
+                                    "ENDED",
+                                    timestamp_ms,
+                                    session_id,
+                                    item.get("contexto", contexto),
+                                )
+                            )
+
+                self._condicoes.pop(chave_condicao, None)
+                self.filtro_temporal.atualizar_persistencia(
+                    chave_condicao,
+                    False,
+                    timestamp_ms,
+                    0,
+                )
+
+        return saida
+
+    # ------------------------------------------------------------------
+    # Ocupação de zona
+    # ------------------------------------------------------------------
+
+    def _processar_ocupacao(
+        self,
+        mensagem: dict[str, Any],
+        timestamp_ms: int,
+    ) -> list[dict[str, Any]]:
+        payload = _payload(mensagem)
+        zona = payload.get("zone_id")
+        count = payload.get("count")
+
+        if not isinstance(zona, str) or not zona.strip():
+            raise ValueError(
+                "ods.s1.zone_occupancy exige zone_id string não vazia"
+            )
+
+        if (
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+        ):
+            raise ValueError(
+                "ods.s1.zone_occupancy exige count integer >= 0"
+            )
+
+        count_by_class = payload.get("count_by_class")
+        if not isinstance(count_by_class, dict):
+            raise ValueError(
+                "ods.s1.zone_occupancy exige count_by_class object"
+            )
+
+        for classe, quantidade in count_by_class.items():
+            if (
+                not isinstance(classe, str)
+                or not isinstance(quantidade, int)
+                or isinstance(quantidade, bool)
+                or quantidade < 0
+            ):
+                raise ValueError(
+                    "count_by_class deve mapear classes para inteiros >= 0"
+                )
+
+        track_ids = _validar_lista_strings(
+            payload.get("track_ids"),
+            "track_ids",
+        )
+
+        if "max_occupancy" in payload:
+            max_occupancy = payload["max_occupancy"]
+            if (
+                not isinstance(max_occupancy, int)
+                or isinstance(max_occupancy, bool)
+                or max_occupancy < 0
+            ):
+                raise ValueError(
+                    "max_occupancy deve ser integer >= 0"
+                )
+
+        session_id = mensagem["session_id"]
+        fonte = mensagem.get("source_id")
+        chave_zona = (session_id, zona)
+        anterior = self._contagem_zonas.get(chave_zona)
+        self._contagem_zonas[chave_zona] = count
+
+        if anterior is None:
+            return []
+
+        saida: list[dict[str, Any]] = []
+
+        for regra in self.regras:
+            tipo = regra["event_type"]
+            threshold = regra.get("threshold")
+
+            if (
+                tipo not in {"OCCUPANCY_ABOVE", "OCCUPANCY_BELOW"}
+                or threshold is None
+            ):
+                continue
+
+            if regra.get("zone_id") and regra["zone_id"] != zona:
+                continue
+
+            cruzou = (
+                tipo == "OCCUPANCY_ABOVE"
+                and anterior <= threshold < count
+            ) or (
+                tipo == "OCCUPANCY_BELOW"
+                and anterior >= threshold > count
+            )
+
+            contexto = {
+                "class": regra.get("class"),
+                "zone_id": zona,
+                "source_ids": [fonte] if fonte else [],
+                "message_id": mensagem["message_id"],
+                "confidence": 1.0,
+                "details": {
+                    "count": count,
+                    "previous_count": anterior,
+                    "track_ids": track_ids,
+                },
+            }
+
+            chave = (zona,)
+
+            if cruzou:
+                saida.extend(
+                    self._atualizar_condicao(
+                        regra,
+                        chave,
+                        True,
+                        timestamp_ms,
+                        contexto,
+                        session_id,
+                        persistencia_override_ms=0,
+                    )
+                )
+
+                chave_condicao = (
+                    session_id,
+                    regra["rule_id"],
+                    *chave,
+                )
+                estado = self._condicoes.get(chave_condicao)
+
+                if estado:
+                    for item in self._estados_da_condicao(estado):
+                        if item.get("event_id"):
+                            saida.append(
+                                self._emitir_evento(
+                                    regra,
+                                    item,
+                                    "ENDED",
+                                    timestamp_ms,
+                                    session_id,
+                                    item.get("contexto", contexto),
+                                )
+                            )
+
+                self._condicoes.pop(chave_condicao, None)
+                self.filtro_temporal.atualizar_persistencia(
+                    chave_condicao,
+                    False,
+                    timestamp_ms,
+                    0,
+                )
+
+        return saida
+
+    # ------------------------------------------------------------------
+    # Encerramento por ausência e expiração
+    # ------------------------------------------------------------------
+
+    
+    def _encerrar_condicoes_de_entidades_ausentes(
+        self,
+        entidades: list[dict[str, Any]],
+        timestamp_ms: int,
+        session_id: str,
+        saida: list[dict[str, Any]],
+    ) -> None:
+        presentes = {entidade["entity_id"] for entidade in entidades}
+
+        for chave, estado in list(self._condicoes.items()):
+            if chave[0] != session_id:
+                continue
+
+            entity_id = chave[2] if len(chave) >= 3 else None
+
+            if (
+                entity_id in presentes
+                or not isinstance(entity_id, str)
+                or not entity_id.startswith("e-")
+            ):
+                continue
+
+            regra = next(
+                (
+                    regra
+                    for regra in self.regras
+                    if regra["rule_id"] == chave[1]
+                ),
+                None,
+            )
+            if regra is None:
+                continue
+
+            estados = self._estados_da_condicao(estado)
+            restantes = []
+
+            for item in estados:
+                ultimo = int(item.get("last_seen_ms", timestamp_ms))
+
+                if timestamp_ms - ultimo <= self.ttl_threshold_ms:
+                    restantes.append(item)
+                    continue
+
+                if item.get("event_id"):
+                    saida.append(
+                        self._emitir_evento(
+                            regra,
+                            item,
+                            "ENDED",
+                            timestamp_ms,
+                            session_id,
+                            item.get("contexto", {}),
+                        )
+                    )
+
+            if restantes:
+                principal = restantes[0]
+                principal.pop("_eventos_adicionais", None)
+
+                if len(restantes) > 1:
+                    principal["_eventos_adicionais"] = restantes[1:]
+
+                self._condicoes[chave] = principal
+            else:
+                self._condicoes.pop(chave, None)
+                self.filtro_temporal.atualizar_persistencia(
+                    chave,
+                    False,
+                    timestamp_ms,
+                    0,
+                )
+                self.filtro_temporal.ultimo_visto.pop(chave, None)
+
+
+    def _expirar_rastros(
+        self,
+        session_id: str,
+        timestamp_ms: int,
+    ) -> None:
+        """Expira rastros com base em captured_at, não no relógio local."""
+        expirados = [
+            chave
+            for chave, ultimo in self._ultima_observacao_rastro.items()
+            if (
+                chave[0] == session_id
+                and timestamp_ms - ultimo > self.ttl_threshold_ms
+            )
+        ]
+
+        for chave in expirados:
+            self._remover_rastro_local(chave)
+
+        expiradas_entidades = [
+            entity_id
+            for entity_id, estado in self._estado_entidades.items()
+            if (
+                estado.get("session_id") == session_id
+                and timestamp_ms - int(estado["last_seen_ms"])
+                > self.ttl_threshold_ms
+            )
+        ]
+
+        for entity_id in expiradas_entidades:
+            self._estado_entidades.pop(entity_id, None)
+
+    # ------------------------------------------------------------------
+    # Reinicialização de sessão
+    # ------------------------------------------------------------------
+
+    def _resetar_estado_sessao(self, session_id: str) -> None:
+        self._estado_entidades = {
+            chave: valor
+            for chave, valor in self._estado_entidades.items()
+            if valor.get("session_id") != session_id
+        }
+
+        self.estado_em_memoria = {
+            chave: valor
+            for chave, valor in self.estado_em_memoria.items()
+            if not chave.startswith(f"{session_id}:")
+        }
+
+        self._track_to_entity = {
+            chave: valor
+            for chave, valor in self._track_to_entity.items()
+            if chave[0] != session_id
+        }
+
+        self._ultima_observacao_rastro = {
+            chave: valor
+            for chave, valor in self._ultima_observacao_rastro.items()
+            if chave[0] != session_id
+        }
+
+        self._condicoes = {
+            chave: valor
+            for chave, valor in self._condicoes.items()
+            if chave[0] != session_id
+        }
+
+        self._contagem_zonas = {
+            chave: valor
+            for chave, valor in self._contagem_zonas.items()
+            if chave[0] != session_id
+        }
+
+        self._inicio_zona = {
+            chave: valor
+            for chave, valor in self._inicio_zona.items()
+            if chave[0] != session_id
+        }
+
+        self._posicao_base = {
+            chave: valor
+            for chave, valor in self._posicao_base.items()
+            if chave[0] != session_id
+        }
+
+        self._ultima_observacao_entidade = {
+            chave: valor
+            for chave, valor in self._ultima_observacao_entidade.items()
+            if chave[0] != session_id
+        }
+
+        self._sequence_por_sessao[session_id] = 0
+        self.filtro_temporal.limpar_sessao(session_id)
